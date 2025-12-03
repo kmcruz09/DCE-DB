@@ -87,6 +87,7 @@ def reset_view():
     st.session_state.render_key = str(random.randint(0, 1000000))
 
 def load_more_entries():
+    st.session_state.scroll_to_entry = st.session_state.visible_count + 1
     st.session_state.visible_count += 30
 
 def clear_search():
@@ -98,7 +99,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
     container_key = f"card_{item['id']}_{index}_{unique_suffix}"
     
     with st.container(key=container_key, border=True):
-        markdown_content = ""
+        markdown_content = f"<div id='entry-{index}-{unique_suffix}'></div>"
         if item["Highlighted"]:
             markdown_content += f"""<style>div.st-key-{container_key}{{background-color:#fffdf5;border:1px solid #e6c845;}}div.st-key-{container_key} p,div.st-key-{container_key} span,div.st-key-{container_key} div{{color:#262730!important;}}div.st-key-{container_key} .katex{{color:#262730!important;}}</style>"""
         title_prop = "Untitled"
@@ -155,17 +156,29 @@ st.markdown("<div id='top'></div>", unsafe_allow_html=True)
 js_scroll_script = ""
 if st.session_state.get("scroll_to_top", False):
     js_scroll_script += f"""
-        var link = window.parent.document.createElement('a');
-        link.href = '#top';
-        window.parent.document.body.appendChild(link);
-        link.click();
-        window.parent.document.body.removeChild(link);
+        setTimeout(function() {{
+            var target = window.parent.document.getElementById('top');
+            if (target) {{
+                target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            }}
+        }}, 300);
         console.log("Link click simulation: {time.time()}");
     """
     st.session_state.scroll_to_top = False
+
+entry_target = st.session_state.get("scroll_to_entry", None)
+if entry_target:
+    js_scroll_script += f"""
+        setTimeout(function() {{
+            var target = window.parent.document.getElementById('entry-{entry_target}-grid');
+            if (target) {{
+                target.scrollIntoView({{behavior: 'smooth', block: 'center'}});
+            }}
+        }}, 300);
+    """
+    st.session_state.scroll_to_entry = None
 if js_scroll_script:
     components.html(f"<script>{js_scroll_script}</script>", height=0, width=0)
-
 
 # 3. State Init
 if "visible_count" not in st.session_state:
