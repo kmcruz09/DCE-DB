@@ -1,62 +1,49 @@
 import streamlit as st
 import streamlit.components.v1 as components
-import re
 import random
-import fxn  # Importing helper functions from fxn.py
+import re
+import fxn
+import time
 
 # --- Page Config ---
-st.set_page_config(page_title="DCE DB", layout="wide", page_icon="📚")
+st.set_page_config(page_title="DCE Prep", layout="centered", page_icon="🩺")
 
-# --- CSS for styling equations, spacing, and compactness ---
+# --- CSS ---
 st.markdown("""
 <style>
-    /* Compact main container */
     .block-container {
-        padding-top: 4rem; /* Increased padding to prevent top bar overlap */
+        padding-top: 4rem;
         padding-bottom: 2rem;
     }
-    /* Reduce spacing between elements */
     .stMarkdown p {
         margin-bottom: 0.5rem;
     }
-    /* Make LaTeX larger and readable */
     .katex { font-size: 1.1em; }
     
-    /* Card Title Styling */
     .entry-title {
         font-weight: 700;
         font-size: 1.1em;
         margin-bottom: 0.2rem;
-        margin-top: 0rem !important; /* Force no top margin to fix spacing issues */
+        margin-top: 0rem !important;
         padding-top: 0rem !important;
     }
     
-    /* Center align the entry counter */
     .entry-counter {
         text-align: center;
         font-weight: 600;
         padding-top: 8px;
     }
-    /* Align the clear button with the text input */
+    
     .stButton button {
         margin-top: 0px; 
     }
     
-    /* Adjust st.warning to look more like a card container */
-    div[data-testid="stAlert"] {
-        padding-top: 0.5rem;
-        padding-bottom: 0.5rem;
-        border: 1px solid #fbc02d; /* Add border to match highlight theme */
-    }
-    
-    /* Info Text */
     .info-text {
         text-align: left;
         font-size: 0.9em;
         color: #666;
     }
     
-    /* End of list text */
     .end-text {
         text-align: center;
         font-size: 0.9em;
@@ -65,113 +52,93 @@ st.markdown("""
         padding: 10px;
     }
     
-    /* Load more status text */
     .load-more-status {
         text-align: center;
         font-size: 0.9em;
         color: #666;
         margin-bottom: 5px;
     }
+    
+    /* Back to Top Link */
+    .back-to-top {
+        text-align: center;
+        margin-top: 20px;
+        padding-bottom: 20px;
+    }
+    .back-to-top a {
+        text-decoration: none;
+        color: #666;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .back-to-top a:hover {
+        color: #fbc02d;
+    }
 </style>
 """, unsafe_allow_html=True)
 
-# --- UI Helper Functions ---
+# --- UI Helpers ---
 
 def reset_view():
-    """Resets the focused index and visible count to initial state."""
+    """Resets view state and scrolls to top when filters change."""
     st.session_state.focused_index = 0
-    st.session_state.visible_count = 50
+    st.session_state.visible_count = 30
+    st.session_state.scroll_to_top = True
+    st.session_state.render_key = str(random.randint(0, 1000000))
 
 def load_more_entries():
-    """Increments the visible entry count."""
-    st.session_state.visible_count += 50
-
-def trigger_scroll_top():
-    """Sets the state to trigger a scroll to top on rerun."""
-    st.session_state.scroll_to_top = True
+    st.session_state.visible_count += 30
 
 def clear_search():
-    """Clears the search query."""
     st.session_state.search_query = ""
     reset_view()
 
-def clear_entry_types():
-    """Clears the Entry Type pills selection."""
-    st.session_state.selected_entry_types = []
-    reset_view()
-
-def render_entry(item, index, expanded_default, api_key, unique_suffix=""):
-    """
-    Renders a single entry.
-    Uses st.container for all entries, with CSS injection for highlighting.
-    """
-    # COMPOSITE KEY FIX
+def render_entry(item, index, api_key, unique_suffix=""):
+    """Renders a single entry card."""
     container_key = f"card_{item['id']}_{index}_{unique_suffix}"
     
-    # We use a standard bordered container for layout consistency
     with st.container(key=container_key, border=True):
-        
-        # Extract Title
+        markdown_content = ""
+        if item["Highlighted"]:
+            markdown_content += f"""<style>div.st-key-{container_key}{{background-color:#fffdf5;border:1px solid #e6c845;}}div.st-key-{container_key} p,div.st-key-{container_key} span,div.st-key-{container_key} div{{color:#262730!important;}}div.st-key-{container_key} .katex{{color:#262730!important;}}</style>"""
         title_prop = "Untitled"
         for key, val in item["raw"]["properties"].items():
             if val["type"] == "title":
                 title_text = fxn.rich_text_to_markdown(val["title"])
                 if title_text: title_prop = title_text
                 break
-        
-        # Format Numbering: [1] Title
         title_prop = f"[{index}] {title_prop}"
-        
-        # Initialize content string
-        markdown_content = ""
-
-        # Highlight Logic: Append CSS to content string if highlighted
-        # Merging CSS and HTML into one string prevents Streamlit from 
-        # rendering an empty block for the style tag.
-        if item["Highlighted"]:
-            markdown_content += f"""<style>div.st-key-{container_key}{{background-color:#fffdf5;border:1px solid #e6c845;}}div.st-key-{container_key} p,div.st-key-{container_key} span,div.st-key-{container_key} div{{color:#262730!important;}}div.st-key-{container_key} .katex{{color:#262730!important;}}</style>"""
-
-        # Append Title HTML
         markdown_content += f"<div class='entry-title'>{title_prop}</div>"
-
-        # 1. Render Title + CSS (Combined)
         st.markdown(markdown_content, unsafe_allow_html=True)
 
-        # 2. Render Metadata
+        # Metadata
         meta_parts = []
-        if item["Entry Type"]: meta_parts.append(f"🏷️ {', '.join(item['Entry Type'])}")
+        if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
         if item["Section"]: meta_parts.append(f"📂 {', '.join(item['Section'])}")
-        if item["Reference"]: meta_parts.append(f"📖 {', '.join(item['Reference'])}")
+        if item["Reference"]: meta_parts.append(f"🔗 {', '.join(item['Reference'])}")
         meta_string = " • ".join(meta_parts)
 
         if meta_string:
             st.caption(meta_string)
         
-        # 3. Render Body
+        # Body
         if item["Body"]:
             st.markdown(item["Body"])
 
-        # 4. Render Images (Safeguarded)
-        image_area = st.empty()
-        
+        # Content Blocks (Images)
         types_needing_images = ["Imaging", "Figure", "Slides", "Table"]
+        
         if any(t in types_needing_images for t in item["Entry Type"]):
-            with image_area.container():
-                with st.spinner(f"Loading content..."):
-                    blocks = fxn.fetch_page_blocks(api_key, item["id"])
-                    if blocks:
-                        for block in blocks:
-                            if block["type"] == "image":
-                                img_type = block["image"]["type"]
-                                img_url = block["image"][img_type]["url"]
-                                caption = fxn.rich_text_to_markdown(block["image"].get("caption", []))
-                                st.image(img_url, caption=caption, width=400)
-                    else:
-                        st.empty()
-        else:
-            image_area.empty()
+            with st.container(key=f"imgs_{container_key}"):
+                blocks = fxn.fetch_page_blocks(api_key, item["id"])
+                if blocks:
+                    for block in blocks:
+                        if block["type"] == "image":
+                            img_type = block["image"]["type"]
+                            img_url = block["image"][img_type]["url"]
+                            st.image(img_url, width=400)
 
-# --- Load Secrets (Hidden) ---
+# --- Secrets ---
 try:
     api_key = st.secrets["NOTION_API_KEY"]
     db_id = st.secrets["NOTION_DATABASE_ID"]
@@ -179,37 +146,34 @@ except:
     st.error("Missing secrets.toml")
     st.stop()
 
-# --- Main App Interface ---
+# --- Main Interface ---
 
-# Scroll to top logic (Robust Implementation)
+# 1. Top Scroll Anchor
+st.markdown("<div id='top'></div>", unsafe_allow_html=True)
+
+# 2. Scroll Logic
+js_scroll_script = ""
 if st.session_state.get("scroll_to_top", False):
-    js_scroll = """
-        <script>
-            setTimeout(function() {
-                var doc = window.parent.document;
-                // Target all possible scroll containers in Streamlit's iframe structure
-                var containers = [
-                    doc.querySelector('section.main'),
-                    doc.querySelector('.stApp'),
-                    doc.documentElement,
-                    doc.body
-                ];
-                containers.forEach(function(el) {
-                    if (el) el.scrollTop = 0;
-                });
-                // Fallback global scroll
-                window.parent.scrollTo(0, 0);
-            }, 150);
-        </script>
+    js_scroll_script += f"""
+        var link = window.parent.document.createElement('a');
+        link.href = '#top';
+        window.parent.document.body.appendChild(link);
+        link.click();
+        window.parent.document.body.removeChild(link);
+        console.log("Link click simulation: {time.time()}");
     """
-    components.html(js_scroll, height=0, width=0)
     st.session_state.scroll_to_top = False
+if js_scroll_script:
+    components.html(f"<script>{js_scroll_script}</script>", height=0, width=0)
 
-# Initialize State
+
+# 3. State Init
 if "visible_count" not in st.session_state:
-    st.session_state.visible_count = 50
+    st.session_state.visible_count = 30
+if "render_key" not in st.session_state:
+    st.session_state.render_key = "init"
 
-# 1. Fetch Data
+# 4. Fetch Data
 with st.spinner("Fetching Entries..."):
     raw_entries = fxn.fetch_database_entries(api_key, db_id)
 
@@ -217,7 +181,7 @@ if not raw_entries:
     st.warning("No entries found.")
     st.stop()
 
-# 2. Process Data
+# 5. Process Data
 processed_entries = []
 ids_to_resolve = set()
 
@@ -244,10 +208,10 @@ for entry in raw_entries:
         "Reference": [str(r) for r in refs],
         "Body": p_body,
         "Highlighted": bool(p_star),
-        "raw": entry
+        "raw": entry,
     })
 
-# 3. Resolve IDs
+# 6. Resolve Names
 id_map = {}
 if ids_to_resolve:
     id_map = fxn.resolve_page_titles(api_key, ids_to_resolve)
@@ -258,13 +222,10 @@ for item in processed_entries:
     item["Reference"] = [id_map.get(r, r) for r in item["Reference"]]
     for s in item["Section"]: all_sections.add(s)
 
-# --- SIDEBAR CONTROLS ---
+# --- Sidebar Controls ---
 st.sidebar.header("View Settings")
+focused_mode = st.sidebar.toggle("Focused Mode", value=False, help="Show one entry at a time")
 
-# Focused Mode Toggle
-focused_mode = st.sidebar.toggle("Focused Mode", value=False, help="Show one entry at a time in the center")
-
-# Shuffle Controls
 if "shuffle_seed" not in st.session_state:
     st.session_state.shuffle_seed = 0
 shuffle_enabled = st.sidebar.toggle("Shuffle Order", value=False, on_change=reset_view)
@@ -274,14 +235,11 @@ if shuffle_enabled:
         st.session_state.shuffle_seed += 1
         reset_view()
 
-# Column Selector
-num_columns = st.sidebar.segmented_control("Columns", options=[1, 2, 3], default=1)
+if not focused_mode:
+    if "focused_index" not in st.session_state:
+        st.session_state.focused_index = 0
 
-# Initialize focused index
-if "focused_index" not in st.session_state:
-    st.session_state.focused_index = 0
-
-# --- SIDEBAR FILTERS ---
+# --- Sidebar Filters ---
 st.sidebar.divider()
 st.sidebar.subheader("Filter by Section")
 
@@ -324,21 +282,26 @@ selected_references = st.sidebar.multiselect(
     on_change=reset_view
 )
 
-# --- MAIN PANEL ---
+st.sidebar.divider()
+if st.sidebar.button("Refresh Cache", help="Clear cache and fetch latest Notion updates", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
 
-# 4. Search Bar (Top)
-search_col1, search_col2 = st.columns([10, 1])
+# --- Main Panel ---
+
+# Search
+search_col1, search_col2 = st.columns([1, 10])
 with search_col1:
-    search_query = st.text_input("🔍 Search Question Body", placeholder="Type keywords...", label_visibility="collapsed", key="search_query")
-with search_col2:
     st.button("✖", on_click=clear_search, help="Clear Search")
+with search_col2:
+    search_query = st.text_input("🔍 Search Question Body", placeholder="Type keywords...", label_visibility="collapsed", key="search_query", on_change=reset_view)
 
-# 5. Main Controls (Highlight)
+
+# Highlight Toggle
 filter_highlight = st.toggle("⭐ Highlighted Only", value=False, on_change=reset_view)
 
-# 6. Pre-Filter Data
+# Pre-Filter
 pre_type_filtered_data = []
-
 for item in processed_entries:
     match_section = True
     if selected_sections:
@@ -368,7 +331,7 @@ for item in processed_entries:
     if match_section and match_ref and match_highlight and match_search:
         pre_type_filtered_data.append(item)
 
-# 7. Dynamic Entry Type Pills
+# Pills
 available_entry_types = set()
 for item in pre_type_filtered_data:
     for t in item["Entry Type"]:
@@ -390,7 +353,7 @@ else:
         key="selected_entry_types"
     )
 
-# 8. Final Filter & Shuffle
+# Final Filter
 filtered_data = []
 for item in pre_type_filtered_data:
     match_type = True
@@ -408,26 +371,16 @@ if total_entries == 0:
     st.warning("No entries found with current filters.")
     st.stop()
 
-# --- DISPLAY LOGIC ---
+list_context_id = f"{st.session_state.render_key}_{len(filtered_data)}"
 
-# Calculate Filter State Hash for Unique Keys
-filter_state = {
-    "sections": tuple(sorted(selected_sections)),
-    "refs": tuple(sorted(selected_references)),
-    "types": tuple(sorted(selected_types)),
-    "highlight": filter_highlight,
-    "search": search_query,
-    "shuffle": st.session_state.shuffle_seed,
-    "columns": num_columns,
-}
-list_context_id = str(hash(str(filter_state)))
+# --- Display ---
 
 if focused_mode:
-    # --- FOCUSED MODE ---
+    # Focused Mode
     st.session_state.focused_index = max(0, min(st.session_state.focused_index, total_entries - 1))
     current_idx = st.session_state.focused_index
     
-    # JS Hack for Arrows
+    # Arrows Listener
     components.html("""
     <script>
     const doc = window.parent.document;
@@ -447,7 +400,7 @@ if focused_mode:
     _, center_col, _ = st.columns([1, 6, 1])
     with center_col:
         item = filtered_data[current_idx]
-        render_entry(item, current_idx + 1, expanded_default=True, api_key=api_key, unique_suffix=f"focus_{list_context_id}")
+        render_entry(item, current_idx + 1, api_key=api_key, unique_suffix=f"focus_{list_context_id}")
 
     st.markdown("") 
 
@@ -466,24 +419,22 @@ if focused_mode:
                 st.rerun()
 
 else:
-    # --- INFINITE SCROLL / LOAD MORE MODE ---
-    
+    # Grid / List Mode
     st.caption(f"Found {total_entries} entries")
 
-    # Determine slice
     visible_count = st.session_state.visible_count
     visible_data = filtered_data[:visible_count]
     
-    # --- Render Grid ---
-    cols = st.columns(num_columns)
-    
-    for i, item in enumerate(visible_data):
-        actual_index = i + 1
-        col_idx = i % num_columns
-        with cols[col_idx]:
-            render_entry(item, actual_index, expanded_default=True, api_key=api_key, unique_suffix=f"grid_{list_context_id}")
+    list_stage = st.empty()
+    with list_stage.container():
+        # Keep the unique key to ensure deep refreshing
+        with st.container(key=f"list_root_{list_context_id}"):
+            # Single Column Layout
+            for i, item in enumerate(visible_data):
+                actual_index = i + 1
+                render_entry(item, actual_index, api_key=api_key, unique_suffix="grid")
 
-    # --- Load More / End of List ---
+    # Load More
     _, btn_col, _ = st.columns([1, 2, 1])
     with btn_col:
         if len(filtered_data) > visible_count:
@@ -492,7 +443,9 @@ else:
         else:
             st.markdown("<div class='end-text'>End of entries</div>", unsafe_allow_html=True)
     
-    # --- Back to Top ---
-    _, top_btn_col, _ = st.columns([1, 2, 1])
-    with top_btn_col:
-        st.button("⬆ Back to Top", on_click=trigger_scroll_top, use_container_width=True)
+    # Always show Back to Top
+    st.markdown("""
+        <div class='back-to-top'>
+            <a href='#top' target='_self'>⬆ Back to Top</a>
+        </div>
+        """, unsafe_allow_html=True)

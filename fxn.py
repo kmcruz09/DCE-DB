@@ -1,33 +1,13 @@
 import streamlit as st
 from notion_client import Client
 import re
-import json
-import os
 
-CACHE_FILE = "notion_cache.json"
-
-def load_cache():
-    """Load the local JSON cache for ID resolution."""
-    if os.path.exists(CACHE_FILE):
-        try:
-            with open(CACHE_FILE, "r") as f:
-                return json.load(f)
-        except:
-            return {}
-    return {}
-
-def save_cache(cache_data):
-    """Save the ID cache to a local JSON file."""
-    try:
-        with open(CACHE_FILE, "w") as f:
-            json.dump(cache_data, f)
-    except Exception as e:
-        print(f"Failed to save cache: {e}")
-
+# Helper: Initialize Client
 def init_notion_client(api_key):
     """Initialize the Notion Client."""
     return Client(auth=api_key)
 
+# Helper: ID Formatting
 def format_uuid(id_str):
     """
     Ensures the ID is in the correct 8-4-4-4-12 UUID format with dashes.
@@ -44,13 +24,10 @@ def format_uuid(id_str):
     raw = hex_match.group(1)
     return f"{raw[:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:]}"
 
+# Helper: Markdown Conversion
 def rich_text_to_markdown(rich_text_list):
     """
     Parses Notion rich_text objects into Markdown.
-    Wraps equations in $...$ and ensures line breaks render correctly.
-    Handles multiline code annotations as proper code blocks.
-    Fixes adjacent space rendering issues in markdown (e.g. ** text**).
-    Disables blockquote rendering by escaping >.
     """
     markdown_text = ""
     for text_obj in rich_text_list:
@@ -59,33 +36,21 @@ def rich_text_to_markdown(rich_text_list):
         # Handle Text
         if text_obj["type"] == "text":
             content = text_obj["text"]["content"]
+            content = content.replace(">", "\>") # Escape blockquotes
             
-            # Disable Blockquotes: Escape > at start of lines or text
-            content = content.replace(">", "\>")
-            
-            # Apply Annotations
             annotations = text_obj.get("annotations", {})
             
-            # Code handling: Check for multiline vs inline
             if annotations.get("code"):
                 if "\n" in content:
-                    # Multiline: Use triple backticks and keep raw newlines
                     content = f"\n```\n{content}\n```\n"
                 else:
-                    # Inline: Use single backticks
                     content = f"`{content}`"
             else:
-                # Regular text processing
-                # Fix Line Breaks: Markdown needs 2 spaces at end of line to break
-                # But we ensure we don't double-space if it's already properly spaced
                 content = content.replace("\n", "  \n")
-                
-                # Logic to handle spaces inside annotations
-                # E.g. " word " with bold should be " **word** " not "** word **"
                 prefix = ""
                 suffix = ""
                 
-                # If there are annotations, we pull leading/trailing whitespace OUTSIDE the markers
+                # Handle spacing outside annotations
                 if annotations.get("bold") or annotations.get("italic") or annotations.get("strikethrough"):
                     if content.startswith(" "):
                         prefix = " "
@@ -93,7 +58,7 @@ def rich_text_to_markdown(rich_text_list):
                     if content.endswith(" "):
                         suffix = " "
                         content = content.rstrip()
-                    if content.endswith("  \n"): # Handle the newline we just added
+                    if content.endswith("  \n"):
                         suffix = "  \n"
                         content = content[:-3]
 
@@ -115,6 +80,7 @@ def rich_text_to_markdown(rich_text_list):
 
     return markdown_text
 
+# Helper: Property Extraction
 def get_property_value(page, property_name):
     """
     Safe extraction of property values based on Notion types.
@@ -135,17 +101,19 @@ def get_property_value(page, property_name):
     elif prop_type == "title":
         return rich_text_to_markdown(prop_data["title"])
     elif prop_type == "relation":
-        # Returns list of IDs
         return [rel["id"] for rel in prop_data["relation"]]
     elif prop_type == "checkbox":
         return prop_data["checkbox"]
     
     return None
 
-@st.cache_data(ttl=300)
+# --- Cached Data Functions ---
+
+@st.cache_data(ttl=3600, persist='disk', show_spinner="Fetching Database...")
 def fetch_database_entries(api_key, db_id):
     """
     Fetches entries using the new Data Source API workflow (v2025).
+    Cached for 1 hour to improve performance.
     """
     notion = init_notion_client(api_key)
     results = []
@@ -181,46 +149,43 @@ def fetch_database_entries(api_key, db_id):
         st.error(f"Error fetching database: {e}")
         return []
 
+@st.cache_data(ttl=86400, show_spinner=False)
 def resolve_page_titles(api_key, ids_to_resolve):
     """
-    Resolves a list of page IDs to titles using local cache first, then API.
+    Resolves a list of page IDs to titles using Streamlit memory cache.
+    Re-runs only if the list of IDs changes.
+    Cached for 24 hours (titles rarely change).
     """
     if not ids_to_resolve:
         return {}
 
-    cache = load_cache()
-    unknown_ids = [uid for uid in ids_to_resolve if uid not in cache]
+    notion = init_notion_client(api_key)
+    cache = {}
     
-    if unknown_ids:
-        notion = init_notion_client(api_key)
+    # Progress bar for user feedback on first run
+    progress_bar = st.progress(0, text="Resolving References...")
+    total = len(ids_to_resolve)
+    
+    for idx, page_id in enumerate(ids_to_resolve):
+        try:
+            page = notion.pages.retrieve(page_id=page_id)
+            title = "Untitled Page"
+            props = page.get("properties", {})
+            for key, val in props.items():
+                if val["type"] == "title":
+                    title = rich_text_to_markdown(val["title"])
+                    break
+            cache[page_id] = title
+        except:
+            cache[page_id] = "Unknown Ref"
         
-        # Determine strict batch size to avoid rate limits? 
-        # Notion retrieves are 1 by 1. We just loop.
-        progress_bar = st.progress(0)
-        total = len(unknown_ids)
+        # Update progress
+        progress_bar.progress((idx + 1) / total)
         
-        for idx, page_id in enumerate(unknown_ids):
-            try:
-                page = notion.pages.retrieve(page_id=page_id)
-                title = "Untitled Page"
-                props = page.get("properties", {})
-                for key, val in props.items():
-                    if val["type"] == "title":
-                        title = rich_text_to_markdown(val["title"])
-                        break
-                cache[page_id] = title
-            except:
-                cache[page_id] = "Unknown Ref"
-            
-            # Update progress
-            progress_bar.progress((idx + 1) / total)
-            
-        progress_bar.empty()
-        save_cache(cache)
-        
+    progress_bar.empty()
     return cache
 
-@st.cache_data(ttl=600)
+@st.cache_data(ttl=3600, show_spinner=False)
 def fetch_page_blocks(api_key, page_id):
     """
     Fetches the children blocks of a page (to find images).
