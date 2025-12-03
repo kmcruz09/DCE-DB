@@ -92,6 +92,7 @@ def load_more_entries():
 
 def clear_search():
     st.session_state.search_query = ""
+    st.session_state.selected_entry_types = []
     reset_view()
 
 def render_entry(item, index, api_key, unique_suffix=""):
@@ -196,44 +197,27 @@ if not raw_entries:
 
 # 5. Process Data
 processed_entries = []
-ids_to_resolve = set()
+all_sections = set()
 
 for entry in raw_entries:
     p_type = fxn.get_property_value(entry, "Entry Type")
-    p_section = fxn.get_property_value(entry, "Section")
-    p_reference = fxn.get_property_value(entry, "Reference")
     p_body = fxn.get_property_value(entry, "Body")
     p_star = fxn.get_property_value(entry, "⭐")
+    sections = fxn.get_property_value(entry, "Section-RU") or []
+    refs = fxn.get_property_value(entry, "Reference-RU") or []
     
-    types = p_type if isinstance(p_type, list) else ([p_type] if p_type else [])
-    sections = p_section if isinstance(p_section, list) else ([p_section] if p_section else [])
-    refs = p_reference if isinstance(p_reference, list) else ([p_reference] if p_reference else [])
-    
-    for s in sections:
-        if re.match(r'^[a-f0-9\-]{32,36}$', str(s)): ids_to_resolve.add(str(s))
-    for r in refs:
-        if re.match(r'^[a-f0-9\-]{32,36}$', str(r)): ids_to_resolve.add(str(r))
+    for s in sections: 
+        all_sections.add(s)
 
     processed_entries.append({
         "id": entry["id"],
-        "Entry Type": types,
-        "Section": [str(s) for s in sections],
-        "Reference": [str(r) for r in refs],
+        "Entry Type": p_type if isinstance(p_type, list) else ([p_type] if p_type else []),
+        "Section": sections,
+        "Reference": refs,
         "Body": p_body,
         "Highlighted": bool(p_star),
         "raw": entry,
     })
-
-# 6. Resolve Names
-id_map = {}
-if ids_to_resolve:
-    id_map = fxn.resolve_page_titles(api_key, ids_to_resolve)
-
-all_sections = set()
-for item in processed_entries:
-    item["Section"] = [id_map.get(s, s) for s in item["Section"]]
-    item["Reference"] = [id_map.get(r, r) for r in item["Reference"]]
-    for s in item["Section"]: all_sections.add(s)
 
 # --- Sidebar Controls ---
 st.sidebar.header("View Settings")
@@ -254,18 +238,14 @@ if not focused_mode:
 
 # --- Sidebar Filters ---
 st.sidebar.divider()
+
+
 st.sidebar.subheader("Filter by Section")
 
 sorted_sections = sorted(list(all_sections))
-btn_col1, btn_col2 = st.sidebar.columns(2)
-with btn_col1:
-    if st.button("Select All"):
-        for sec in sorted_sections: st.session_state[f"chk_{sec}"] = True
-        reset_view()
-with btn_col2:
-    if st.button("Clear All"):
-        for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
-        reset_view()
+if st.sidebar.button("Reset"):
+    for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
+    reset_view()
 
 selected_sections = []
 if not sorted_sections:
@@ -305,7 +285,7 @@ if st.sidebar.button("Refresh Cache", help="Clear cache and fetch latest Notion 
 # Search
 search_col1, search_col2 = st.columns([1, 10])
 with search_col1:
-    st.button("✖", on_click=clear_search, help="Clear Search")
+    st.button("✖", on_click=clear_search, help="Clear Filters")
 with search_col2:
     search_query = st.text_input("🔍 Search Question Body", placeholder="Type keywords...", label_visibility="collapsed", key="search_query", on_change=reset_view)
 

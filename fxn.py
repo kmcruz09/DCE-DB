@@ -84,6 +84,7 @@ def rich_text_to_markdown(rich_text_list):
 def get_property_value(page, property_name):
     """
     Safe extraction of property values based on Notion types.
+    Now supports Rollups (for Section/Reference names).
     """
     props = page.get("properties", {})
     if property_name not in props:
@@ -94,16 +95,39 @@ def get_property_value(page, property_name):
     
     if prop_type == "select":
         return prop_data["select"]["name"] if prop_data["select"] else None
+    
     elif prop_type == "multi_select":
         return [item["name"] for item in prop_data["multi_select"]]
+    
     elif prop_type == "rich_text":
         return rich_text_to_markdown(prop_data["rich_text"])
+    
     elif prop_type == "title":
         return rich_text_to_markdown(prop_data["title"])
+    
     elif prop_type == "relation":
+        # Returns list of IDs
         return [rel["id"] for rel in prop_data["relation"]]
+    
     elif prop_type == "checkbox":
         return prop_data["checkbox"]
+    
+    # --- NEW: Rollup Support ---
+    elif prop_type == "rollup":
+        rollup = prop_data["rollup"]
+        values = []
+        
+        # We only care about arrays (Notion returns relations as arrays)
+        if rollup["type"] == "array":
+            for item in rollup["array"]:
+                # Rollups usually contain 'title' or 'rich_text' objects
+                if item["type"] == "title":
+                    values.append(rich_text_to_markdown(item["title"]))
+                elif item["type"] == "rich_text":
+                    values.append(rich_text_to_markdown(item["rich_text"]))
+                    
+        return values
+    # ---------------------------
     
     return None
 
@@ -149,41 +173,6 @@ def fetch_database_entries(api_key, db_id):
         st.error(f"Error fetching database: {e}")
         return []
 
-@st.cache_data(ttl=86400, show_spinner=False)
-def resolve_page_titles(api_key, ids_to_resolve):
-    """
-    Resolves a list of page IDs to titles using Streamlit memory cache.
-    Re-runs only if the list of IDs changes.
-    Cached for 24 hours (titles rarely change).
-    """
-    if not ids_to_resolve:
-        return {}
-
-    notion = init_notion_client(api_key)
-    cache = {}
-    
-    # Progress bar for user feedback on first run
-    progress_bar = st.progress(0, text="Resolving References...")
-    total = len(ids_to_resolve)
-    
-    for idx, page_id in enumerate(ids_to_resolve):
-        try:
-            page = notion.pages.retrieve(page_id=page_id)
-            title = "Untitled Page"
-            props = page.get("properties", {})
-            for key, val in props.items():
-                if val["type"] == "title":
-                    title = rich_text_to_markdown(val["title"])
-                    break
-            cache[page_id] = title
-        except:
-            cache[page_id] = "Unknown Ref"
-        
-        # Update progress
-        progress_bar.progress((idx + 1) / total)
-        
-    progress_bar.empty()
-    return cache
 
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_page_blocks(api_key, page_id):
