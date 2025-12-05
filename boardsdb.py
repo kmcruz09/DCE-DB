@@ -220,26 +220,6 @@ for entry in raw_entries:
     })
 
 # --- Sidebar Controls ---
-st.sidebar.header("View Settings")
-focused_mode = st.sidebar.toggle("Focused Mode", value=False, help="Show one entry at a time")
-
-if "shuffle_seed" not in st.session_state:
-    st.session_state.shuffle_seed = 0
-shuffle_enabled = st.sidebar.toggle("Shuffle Order", value=False, on_change=reset_view)
-
-if shuffle_enabled:
-    if st.sidebar.button("Reshuffle", use_container_width=True):
-        st.session_state.shuffle_seed += 1
-        reset_view()
-
-if not focused_mode:
-    if "focused_index" not in st.session_state:
-        st.session_state.focused_index = 0
-
-# --- Sidebar Filters ---
-st.sidebar.divider()
-
-
 st.sidebar.subheader("Filter by Section")
 
 sorted_sections = sorted(list(all_sections))
@@ -282,32 +262,46 @@ if st.sidebar.button("Refresh Cache", help="Clear cache and fetch latest Notion 
 
 # --- Main Panel ---
 
+
+# Highlighted / Shuffle / Focused
+c1,c2,c3,c4 = st.columns([3,2,2,3])
+with c1:
+    # Highlight Toggle
+    filter_highlight = st.toggle("⭐ Only", value=False, on_change=reset_view)
+with c2:
+    if "shuffle_seed" not in st.session_state:
+        st.session_state.shuffle_seed = 0
+    shuffle_enabled = st.toggle("Shuffle", value=False, on_change=reset_view)
+with c3:
+    if shuffle_enabled:
+        if st.button("🎲", help="Reshuffle"):
+            st.session_state.shuffle_seed += 1
+            reset_view()
+with c4:
+    focused_mode = st.toggle("Focused Mode", value=False, help="Show one entry at a time")
+if not focused_mode:
+    if "focused_index" not in st.session_state:
+        st.session_state.focused_index = 0
+
 # Search
-search_col1, search_col2 = st.columns([1, 10])
+search_col1, search_col2 = st.columns([5, 2])
 with search_col1:
-    st.button("✖", on_click=clear_search, help="Clear Filters")
-with search_col2:
     search_query = st.text_input("🔍 Search Question Body", placeholder="Type keywords...", label_visibility="collapsed", key="search_query", on_change=reset_view)
+with search_col2:
+    st.button("✖", on_click=clear_search, help="Clear Filters")
 
-
-# Highlight Toggle
-filter_highlight = st.toggle("⭐ Highlighted Only", value=False, on_change=reset_view)
-
-# Pre-Filter
+# Entry Filters
 pre_type_filtered_data = []
 for item in processed_entries:
     match_section = True
     if selected_sections:
         match_section = any(s in selected_sections for s in item["Section"])
-    
     match_ref = True
     if selected_references:
         match_ref = any(r in item["Reference"] for r in selected_references)
-    
     match_highlight = True
     if filter_highlight:
         match_highlight = item["Highlighted"]
-    
     match_search = True
     if search_query:
         query = search_query.lower()
@@ -320,7 +314,6 @@ for item in processed_entries:
                 break
         in_title = query in title_text
         match_search = in_body or in_title
-    
     if match_section and match_ref and match_highlight and match_search:
         pre_type_filtered_data.append(item)
 
