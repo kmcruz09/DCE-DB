@@ -272,20 +272,17 @@ if not focused_mode:
         st.session_state.focused_index = 0
 
 # Search
-search_col1, search_col2= st.columns([1, 2])
-with search_col1:
+with st.container(horizontal=True):
     search_query = st.text_input("Search", placeholder="Type keywords...",
                                  width=200,
                                  label_visibility="collapsed",
                                  key="search_query",
                                  on_change=reset_view)
-with search_col2:
-    with st.container(horizontal=True):
-        st.button("✖", on_click=clear_search, help="Clear Filters")
-        if shuffle_enabled:
-            if st.button("🎲", help="Reshuffle"):
-                st.session_state.shuffle_seed += 1
-                reset_view()
+    st.button("✖", on_click=clear_search, help="Clear Filters")
+    if shuffle_enabled:
+        if st.button("🎲", help="Reshuffle"):
+            st.session_state.shuffle_seed += 1
+            reset_view()
 
 
 # Entry Filters
