@@ -190,7 +190,6 @@ if "render_key" not in st.session_state:
 # 4. Fetch Data
 with st.spinner("Fetching Entries..."):
     raw_entries = fxn.fetch_database_entries(api_key, db_id)
-
 if not raw_entries:
     st.warning("No entries found.")
     st.stop()
@@ -264,16 +263,16 @@ if "shuffle_seed" not in st.session_state:
     st.session_state.shuffle_seed = 0
 
 with st.container(horizontal=True):
-    filter_highlight = st.toggle("Highlighted Only ⭐", value=False, on_change=reset_view)
+    filter_highlight = st.toggle("⭐ Only", value=False, on_change=reset_view)
     shuffle_enabled = st.toggle("Shuffle", value=False, on_change=reset_view)
-    focused_mode = st.toggle("Focused Mode", value=False, help="One entry at a time")
+    focused_mode = st.toggle("Focused", value=False, help="One entry at a time")
 
 if not focused_mode:
     if "focused_index" not in st.session_state:
         st.session_state.focused_index = 0
 
 # Search
-search_col1, search_col2= st.columns([4, 3])
+search_col1, search_col2= st.columns([1, 1])
 with search_col1:
     search_query = st.text_input("🔍 Search Question Body", placeholder="Type keywords...", label_visibility="collapsed", key="search_query", on_change=reset_view)
 with search_col2:
