@@ -223,10 +223,6 @@ for entry in raw_entries:
 st.sidebar.subheader("Filter by Section")
 
 sorted_sections = sorted(list(all_sections))
-if st.sidebar.button("Reset"):
-    for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
-    reset_view()
-
 selected_sections = []
 if not sorted_sections:
     st.sidebar.caption("No sections found")
@@ -236,6 +232,10 @@ else:
         if key not in st.session_state: st.session_state[key] = False
         if st.sidebar.checkbox(sec, key=key, on_change=reset_view):
             selected_sections.append(sec)
+
+if st.sidebar.button("Reset"):
+    for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
+    reset_view()
 
 st.sidebar.divider()
 st.sidebar.subheader("Filter by Reference")
@@ -261,34 +261,30 @@ if st.sidebar.button("Refresh Cache", help="Clear cache and fetch latest Notion 
     st.rerun()
 
 # --- Main Panel ---
+if "shuffle_seed" not in st.session_state:
+    st.session_state.shuffle_seed = 0
 
-
-# Highlighted / Shuffle / Focused
-c1,c2,c3,c4 = st.columns([3,2,2,3])
-with c1:
-    # Highlight Toggle
-    filter_highlight = st.toggle("⭐ Only", value=False, on_change=reset_view)
-with c2:
-    if "shuffle_seed" not in st.session_state:
-        st.session_state.shuffle_seed = 0
+with st.container(horizontal=True):
+    filter_highlight = st.toggle("Highlighted Only ⭐", value=False, on_change=reset_view)
     shuffle_enabled = st.toggle("Shuffle", value=False, on_change=reset_view)
-with c3:
-    if shuffle_enabled:
-        if st.button("🎲", help="Reshuffle"):
-            st.session_state.shuffle_seed += 1
-            reset_view()
-with c4:
-    focused_mode = st.toggle("Focused Mode", value=False, help="Show one entry at a time")
+    focused_mode = st.toggle("Focused Mode", value=False, help="One entry at a time")
+
 if not focused_mode:
     if "focused_index" not in st.session_state:
         st.session_state.focused_index = 0
 
 # Search
-search_col1, search_col2 = st.columns([5, 2])
+search_col1, search_col2= st.columns([4, 3])
 with search_col1:
     search_query = st.text_input("🔍 Search Question Body", placeholder="Type keywords...", label_visibility="collapsed", key="search_query", on_change=reset_view)
 with search_col2:
-    st.button("✖", on_click=clear_search, help="Clear Filters")
+    with st.container(horizontal=True):
+        st.button("✖", on_click=clear_search, help="Clear Filters")
+        if shuffle_enabled:
+            if st.button("🎲", help="Reshuffle"):
+                st.session_state.shuffle_seed += 1
+                reset_view()
+
 
 # Entry Filters
 pre_type_filtered_data = []
