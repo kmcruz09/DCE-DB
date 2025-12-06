@@ -275,7 +275,7 @@ if not focused_mode:
 search_col1, search_col2= st.columns([1, 2])
 with search_col1:
     search_query = st.text_input("Search", placeholder="Type keywords...",
-                                 width=300,
+                                 width=200,
                                  label_visibility="collapsed",
                                  key="search_query",
                                  on_change=reset_view)
