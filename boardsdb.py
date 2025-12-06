@@ -138,7 +138,14 @@ def render_entry(item, index, api_key, unique_suffix=""):
                         if block["type"] == "image":
                             img_type = block["image"]["type"]
                             img_url = block["image"][img_type]["url"]
-                            st.image(img_url, width=400)
+                            #st.image(img_url, width=400)
+                            img_html = f"""
+                            <a href="{img_url}" target="_blank" title="Click to open full size">
+                                <img src="{img_url}" 
+                                     style="width: 400px; max-width: 100%; border-radius: 10px; margin-top: 0px; margin-bottom:12px;">
+                            </a><br>
+                            """
+                            st.markdown(img_html, unsafe_allow_html=True)
 
 # --- Secrets ---
 try:
