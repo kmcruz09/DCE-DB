@@ -237,7 +237,6 @@ if st.sidebar.button("Reset"):
     for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
     reset_view()
 
-st.sidebar.divider()
 st.sidebar.subheader("Filter by Reference")
 
 available_references = set()
@@ -256,7 +255,7 @@ selected_references = st.sidebar.multiselect(
 )
 
 st.sidebar.divider()
-if st.sidebar.button("Refresh Cache", help="Clear cache and fetch latest Notion updates", use_container_width=True):
+if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch updates"):
     st.cache_data.clear()
     st.rerun()
 
