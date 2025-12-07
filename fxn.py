@@ -24,6 +24,13 @@ def format_uuid(id_str):
     raw = hex_match.group(1)
     return f"{raw[:8]}-{raw[8:12]}-{raw[12:16]}-{raw[16:20]}-{raw[20:]}"
 
+#  Helper: Plain Text Extraction
+def rich_text_to_plain_text(rich_text_list):
+    """
+    Extracts plain text from Notion rich_text objects, ignoring annotations.
+    """
+    return "".join([t.get("plain_text", "") for t in rich_text_list])
+
 # Helper: Markdown Conversion
 def rich_text_to_markdown(rich_text_list):
     """
@@ -81,10 +88,10 @@ def rich_text_to_markdown(rich_text_list):
     return markdown_text
 
 # Helper: Property Extraction
-def get_property_value(page, property_name):
+def get_property_value(page, property_name, as_plain_text=False):
     """
     Safe extraction of property values based on Notion types.
-    Now supports Rollups (for Section/Reference names).
+    Supports Rollups and allows forcing plain text output.
     """
     props = page.get("properties", {})
     if property_name not in props:
@@ -93,6 +100,9 @@ def get_property_value(page, property_name):
     prop_data = props[property_name]
     prop_type = prop_data["type"]
     
+    # Determine which converter to use
+    converter = rich_text_to_plain_text if as_plain_text else rich_text_to_markdown
+
     if prop_type == "select":
         return prop_data["select"]["name"] if prop_data["select"] else None
     
@@ -100,34 +110,29 @@ def get_property_value(page, property_name):
         return [item["name"] for item in prop_data["multi_select"]]
     
     elif prop_type == "rich_text":
-        return rich_text_to_markdown(prop_data["rich_text"])
+        return converter(prop_data["rich_text"])
     
     elif prop_type == "title":
-        return rich_text_to_markdown(prop_data["title"])
+        return converter(prop_data["title"])
     
     elif prop_type == "relation":
-        # Returns list of IDs
         return [rel["id"] for rel in prop_data["relation"]]
     
     elif prop_type == "checkbox":
         return prop_data["checkbox"]
     
-    # --- NEW: Rollup Support ---
     elif prop_type == "rollup":
         rollup = prop_data["rollup"]
         values = []
         
-        # We only care about arrays (Notion returns relations as arrays)
         if rollup["type"] == "array":
             for item in rollup["array"]:
-                # Rollups usually contain 'title' or 'rich_text' objects
                 if item["type"] == "title":
-                    values.append(rich_text_to_markdown(item["title"]))
+                    values.append(converter(item["title"]))
                 elif item["type"] == "rich_text":
-                    values.append(rich_text_to_markdown(item["rich_text"]))
+                    values.append(converter(item["rich_text"]))
                     
         return values
-    # ---------------------------
     
     return None
 

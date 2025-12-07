@@ -106,7 +106,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
         title_prop = "Untitled"
         for key, val in item["raw"]["properties"].items():
             if val["type"] == "title":
-                title_text = fxn.rich_text_to_markdown(val["title"])
+                title_text = fxn.rich_text_to_plain_text(val["title"])
                 if title_text: title_prop = title_text
                 break
         title_prop = f"[{index}] {title_prop}"
@@ -209,8 +209,8 @@ for entry in raw_entries:
     p_type = fxn.get_property_value(entry, "Entry Type")
     p_body = fxn.get_property_value(entry, "Body")
     p_star = fxn.get_property_value(entry, "⭐")
-    sections = fxn.get_property_value(entry, "Section-RU") or []
-    refs = fxn.get_property_value(entry, "Reference-RU") or []
+    sections = fxn.get_property_value(entry, "Section-RU", as_plain_text=True) or []
+    refs = fxn.get_property_value(entry, "Reference-RU", as_plain_text=True) or []
     
     for s in sections: 
         all_sections.add(s)
@@ -230,6 +230,9 @@ st.sidebar.subheader("Filter by Section")
 
 sorted_sections = sorted(list(all_sections))
 selected_sections = []
+if st.sidebar.button("Reset"):
+    for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
+    reset_view()
 if not sorted_sections:
     st.sidebar.caption("No sections found")
 else:
@@ -239,9 +242,7 @@ else:
         if st.sidebar.checkbox(sec, key=key, on_change=reset_view):
             selected_sections.append(sec)
 
-if st.sidebar.button("Reset"):
-    for sec in sorted_sections: st.session_state[f"chk_{sec}"] = False
-    reset_view()
+
 
 st.sidebar.subheader("Filter by Reference")
 
