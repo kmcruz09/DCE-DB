@@ -27,6 +27,16 @@ st.markdown("""
         margin-top: 0rem !important;
         padding-top: 0rem !important;
     }
+            
+    .entry-title a {
+        text-decoration: none;
+        color: #666;
+        font-weight: 600;
+        cursor: pointer;
+    }
+    .entry-title a:hover {
+        color: #fbc02d;
+    }
     
     .entry-counter {
         text-align: center;
@@ -104,13 +114,15 @@ def render_entry(item, index, api_key, unique_suffix=""):
         if item["Highlighted"]:
             markdown_content += f"""<style>div.st-key-{container_key}{{background-color:#fffdf5;border:1px solid #e6c845;}}div.st-key-{container_key} p,div.st-key-{container_key} span,div.st-key-{container_key} div{{color:#262730!important;}}div.st-key-{container_key} .katex{{color:#262730!important;}}</style>"""
         title_prop = "Untitled"
+        page_url = item["raw"]["url"]
+
         for key, val in item["raw"]["properties"].items():
             if val["type"] == "title":
                 title_text = fxn.rich_text_to_plain_text(val["title"])
                 if title_text: title_prop = title_text
                 break
         title_prop = f"[{index}] {title_prop}"
-        markdown_content += f"<div class='entry-title'>{title_prop}</div>"
+        markdown_content += f"<div class='entry-title'>{title_prop}<a href='{page_url}' target='_blank' title='Open in Notion'> ↗</a></div>"
         st.markdown(markdown_content, unsafe_allow_html=True)
 
         # Metadata
