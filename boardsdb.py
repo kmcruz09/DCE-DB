@@ -122,7 +122,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
                 if title_text: title_prop = title_text
                 break
         title_prop = f"[{index}] {title_prop}"
-        markdown_content += f"<div class='entry-title'>{title_prop}<a href='{page_url}' target='_blank' title='Open in Notion'> ↗</a></div>"
+        markdown_content += f"<div class='entry-title'>{title_prop}<a href='{page_url}' target='_blank' title='link for Kaiser only ✌️'> ↗</a></div>"
         st.markdown(markdown_content, unsafe_allow_html=True)
 
         # Metadata
