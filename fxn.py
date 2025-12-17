@@ -75,7 +75,8 @@ def rich_text_to_markdown(rich_text_list):
                     content = f"*{content}*"
                 if annotations.get("strikethrough"):
                     content = f"~~{content}~~"
-                
+                if annotations.get("underline"):
+                    content = f"<u>{content}</u>"
                 content = f"{prefix}{content}{suffix}"
                 
         # Handle Equations
@@ -138,7 +139,7 @@ def get_property_value(page, property_name, as_plain_text=False):
 
 # --- Cached Data Functions ---
 
-@st.cache_data(ttl=3600, persist='disk', show_spinner="Fetching Database...")
+@st.cache_data(persist='disk', show_spinner="Fetching Database...")
 def fetch_database_entries(api_key, db_id):
     """
     Fetches entries using the new Data Source API workflow (v2025).
@@ -173,6 +174,7 @@ def fetch_database_entries(api_key, db_id):
             results.extend(response["results"])
             has_more = response["has_more"]
             start_cursor = response["next_cursor"]
+        results.sort(key=lambda x: x["created_time"])
         return results
     except Exception as e:
         st.error(f"Error fetching database: {e}")

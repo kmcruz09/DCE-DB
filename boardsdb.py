@@ -95,10 +95,13 @@ def reset_view():
     st.session_state.visible_count = 30
     st.session_state.scroll_to_top = True
     st.session_state.render_key = str(random.randint(0, 1000000))
+    if "count" in st.query_params:
+        del st.query_params["count"]
 
 def load_more_entries():
     st.session_state.scroll_to_entry = st.session_state.visible_count + 1
     st.session_state.visible_count += 30
+    st.query_params["count"] = str(st.session_state.visible_count)
 
 def clear_search():
     st.session_state.search_query = ""
@@ -137,7 +140,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
         
         # Body
         if item["Body"]:
-            st.markdown(item["Body"])
+            st.markdown(item["Body"], unsafe_allow_html=True)
 
         # Content Blocks (Images)
         types_needing_images = ["Imaging", "Figure", "Slides", "Table"]
@@ -202,7 +205,11 @@ if js_scroll_script:
 
 # 3. State Init
 if "visible_count" not in st.session_state:
-    st.session_state.visible_count = 30
+    try:
+        saved_count = int(st.query_params.get("count", 30))
+    except:
+        saved_count = 30
+    st.session_state.visible_count = saved_count
 if "render_key" not in st.session_state:
     st.session_state.render_key = "init"
 
