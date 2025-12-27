@@ -325,21 +325,23 @@ with st.container(horizontal=True):
         label_visibility="collapsed",
         on_change=reset_view
     )
-    
+
+with st.container(horizontal=True):
+    reverse_sort = st.toggle("Newest First", value=False, on_change=reset_view)
     shuffle_enabled = st.toggle("Shuffle", value=False, on_change=reset_view)
     focused_mode = st.toggle("Focused", value=False, help="One entry at a time")
-
 if not focused_mode:
     if "focused_index" not in st.session_state: st.session_state.focused_index = 0
 
 # Search
 with st.container(horizontal=True):
-    search_query = st.text_input("Search", placeholder="Type keywords...", width=200, label_visibility="collapsed", key="search_query", on_change=reset_view)
+    search_query = st.text_input("Search", placeholder="Type keywords...", width=400, label_visibility="collapsed", key="search_query", on_change=reset_view)
     st.button("✖", on_click=clear_search, help="Clear Filters")
     if shuffle_enabled:
         if st.button("🎲", help="Reshuffle"):
             st.session_state.shuffle_seed += 1
             reset_view()
+
 
 # Apply Filters
 pre_type_filtered_data = []
@@ -399,6 +401,9 @@ for item in pre_type_filtered_data:
     if selected_types:
         match_type = any(t in item["Entry Type"] for t in selected_types)
     if match_type: filtered_data.append(item)
+
+if reverse_sort and not shuffle_enabled:
+    filtered_data.reverse()
 
 if shuffle_enabled:
     rng = random.Random(st.session_state.shuffle_seed)
