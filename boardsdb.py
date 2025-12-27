@@ -11,92 +11,48 @@ st.set_page_config(page_title="DCE Prep", layout="centered", page_icon="🩺")
 # --- CSS ---
 st.markdown("""
 <style>
-    .block-container {
-        padding-top: 4rem;
-        padding-bottom: 2rem;
-    }
-    .stMarkdown p {
-        margin-bottom: 0.5rem;
-    }
+    .block-container { padding-top: 4rem; padding-bottom: 2rem; }
+    .stMarkdown p { margin-bottom: 0.5rem; }
     .katex { font-size: 1.1em; }
     
     .entry-title {
-        font-weight: 700;
-        font-size: 1.1em;
-        margin-bottom: 0.2rem;
-        margin-top: 0rem !important;
-        padding-top: 0rem !important;
+        font-weight: 700; font-size: 1.1em;
+        margin-bottom: 0.2rem; margin-top: 0rem !important; padding-top: 0rem !important;
     }
             
-    .entry-title a {
-        text-decoration: none;
-        color: #666;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    .entry-title a:hover {
-        color: #fbc02d;
-    }
+    .entry-title a { text-decoration: none; color: #666; font-weight: 600; cursor: pointer; }
+    .entry-title a:hover { color: #fbc02d; }
+    .entry-counter { text-align: center; font-weight: 600; padding-top: 8px; }
+    .stButton button { margin-top: 0px; }
     
-    .entry-counter {
-        text-align: center;
-        font-weight: 600;
-        padding-top: 8px;
+    .info-text { text-align: left; font-size: 0.9em; color: #666; }
+    .end-text { text-align: center; font-size: 0.9em; color: #888; font-style: italic; padding: 10px; }
+    .load-more-status { text-align: center; font-size: 0.9em; color: #666; margin-bottom: 5px; }
+
+    .back-to-top { text-align: center; margin-top: 20px; padding-bottom: 20px; }
+    .back-to-top a { text-decoration: none; color: #666; font-weight: 600; cursor: pointer; }
+    .back-to-top a:hover { color: #fbc02d; }
+    div[data-testid="stButtonGroup"] {
+        transform: scale(0.85);
+        transform-origin: left top;
+        margin-bottom: -15px !important; /* Pull up bottom space */
     }
-    
-    .stButton button {
-        margin-top: 0px; 
+    div[data-testid="stButtonGroup"] > div {
+        padding-top: 0px !important;
+        padding-bottom: 0px !important;
     }
-    
-    .info-text {
-        text-align: left;
-        font-size: 0.9em;
-        color: #666;
-    }
-    
-    .end-text {
-        text-align: center;
-        font-size: 0.9em;
-        color: #888;
-        font-style: italic;
-        padding: 10px;
-    }
-    
-    .load-more-status {
-        text-align: center;
-        font-size: 0.9em;
-        color: #666;
-        margin-bottom: 5px;
-    }
-    
-    /* Back to Top Link */
-    .back-to-top {
-        text-align: center;
-        margin-top: 20px;
-        padding-bottom: 20px;
-    }
-    .back-to-top a {
-        text-decoration: none;
-        color: #666;
-        font-weight: 600;
-        cursor: pointer;
-    }
-    .back-to-top a:hover {
-        color: #fbc02d;
-    }
+
 </style>
 """, unsafe_allow_html=True)
 
 # --- UI Helpers ---
-
 def reset_view():
     """Resets view state and scrolls to top when filters change."""
     st.session_state.focused_index = 0
     st.session_state.visible_count = 30
     st.session_state.scroll_to_top = True
     st.session_state.render_key = str(random.randint(0, 1000000))
-    if "count" in st.query_params:
-        del st.query_params["count"]
+    if "count" in st.query_params: del st.query_params["count"]
 
 def load_more_entries():
     st.session_state.scroll_to_entry = st.session_state.visible_count + 1
@@ -108,14 +64,55 @@ def clear_search():
     st.session_state.selected_entry_types = []
     reset_view()
 
+if "priority_updates" not in st.session_state:
+    st.session_state.priority_updates = {}
+
+def update_priority_callback(page_id, key_name):
+    new_val = st.session_state[key_name]
+    fxn.update_page_property(api_key, page_id, "Priority", new_val)
+    st.session_state.priority_updates[page_id] = new_val
+    st.toast(f"✅ Priority updated to {new_val}") 
+
 def render_entry(item, index, api_key, unique_suffix=""):
     """Renders a single entry card."""
     container_key = f"card_{item['id']}_{index}_{unique_suffix}"
     
+    bg_color = "#ffffff"
+    border_color = "rgba(49, 51, 63, 0.2)"
+    text_color = "inherit"
+    priority = item["Priority"]
+    if priority == "1":
+        bg_color = "#f0fdf4"
+        border_color = "#86efac"
+        text_color = "#262730"
+    elif priority == "2":
+        bg_color = "#fffdf5"
+        border_color = "#e6c845"
+        text_color = "#262730"
+    elif priority == "3":
+        bg_color = "#fff5f5" 
+        border_color = "#ff99aa" 
+        text_color = "#262730"
+
     with st.container(key=container_key, border=True):
         markdown_content = f"<div id='entry-{index}-{unique_suffix}'></div>"
-        if item["Highlighted"]:
-            markdown_content += f"""<style>div.st-key-{container_key}{{background-color:#fffdf5;border:1px solid #e6c845;}}div.st-key-{container_key} p,div.st-key-{container_key} span,div.st-key-{container_key} div{{color:#262730!important;}}div.st-key-{container_key} .katex{{color:#262730!important;}}</style>"""
+        if priority in ["1", "2", "3"]:
+            markdown_content += f"""
+            <style>
+                div.st-key-{container_key} {{
+                    background-color: {bg_color};
+                    border: 1px solid {border_color};
+                }}
+                div.st-key-{container_key} p,
+                div.st-key-{container_key} span,
+                div.st-key-{container_key} div {{
+                    color: {text_color} !important;
+                }}
+                div.st-key-{container_key} .katex {{
+                    color: {text_color} !important;
+                }}
+            </style>
+            """
         title_prop = "Untitled"
         page_url = item["raw"]["url"]
 
@@ -126,18 +123,33 @@ def render_entry(item, index, api_key, unique_suffix=""):
                 break
         title_prop = f"[{index}] {title_prop}"
         markdown_content += f"<div class='entry-title'>{title_prop}<a href='{page_url}' target='_blank' title='link for Kaiser only ✌️'> ↗</a></div>"
-        st.markdown(markdown_content, unsafe_allow_html=True)
-
-        # Metadata
-        meta_parts = []
-        if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
-        if item["Section"]: meta_parts.append(f"📂 {', '.join(item['Section'])}")
-        if item["Reference"]: meta_parts.append(f"🔗 {', '.join(item['Reference'])}")
-        meta_string = " • ".join(meta_parts)
-
-        if meta_string:
-            st.caption(meta_string)
         
+        
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            st.markdown(markdown_content, unsafe_allow_html=True)
+            # Metadata
+            meta_parts = []
+            if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
+            if item["Section"]: meta_parts.append(f"📂 {', '.join(item['Section'])}")
+            if item["Reference"]: meta_parts.append(f"🔗 {', '.join(item['Reference'])}")
+            meta_string = " • ".join(meta_parts)
+            if meta_string:
+                st.caption(meta_string)
+        with c2:
+            if edit_mode:
+                prio_key = f"prio_select_{unique_suffix}_{item['id']}"
+                current_sel = priority if priority in ["0", "1","2", "3"] else None
+                st.segmented_control(
+                    "Priority",
+                    options=["0", "1", "2", "3"],
+                    selection_mode="single",
+                    default=current_sel,
+                    key=prio_key,
+                    label_visibility="collapsed",
+                    on_change=update_priority_callback,
+                    args=(item["id"], prio_key)
+                )
         # Body
         if item["Body"]:
             st.markdown(item["Body"], unsafe_allow_html=True)
@@ -161,6 +173,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
                             </a><br>
                             """
                             st.markdown(img_html, unsafe_allow_html=True)
+
 
 # --- Secrets ---
 try:
@@ -227,7 +240,12 @@ all_sections = set()
 for entry in raw_entries:
     p_type = fxn.get_property_value(entry, "Entry Type")
     p_body = fxn.get_property_value(entry, "Body")
-    p_star = fxn.get_property_value(entry, "⭐")
+
+    if entry["id"] in st.session_state.priority_updates:
+        p_prio = st.session_state.priority_updates[entry["id"]]
+    else:
+        p_prio = fxn.get_property_value(entry, "Priority")
+
     sections = fxn.get_property_value(entry, "Section-RU", as_plain_text=True) or []
     refs = fxn.get_property_value(entry, "Reference-RU", as_plain_text=True) or []
     
@@ -240,7 +258,7 @@ for entry in raw_entries:
         "Section": sections,
         "Reference": refs,
         "Body": p_body,
-        "Highlighted": bool(p_star),
+        "Priority": p_prio, # "1", "2", "3", or None
         "raw": entry,
     })
 
@@ -285,34 +303,45 @@ if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch update
     st.cache_data.clear()
     st.rerun()
 
+st.sidebar.divider()
+edit_mode = False
+admin_pass = st.sidebar.text_input("🔒 Edit Priorities", type="password", key="admin_password_input")
+if "ADMIN_PASSWORD" in st.secrets and admin_pass == st.secrets["ADMIN_PASSWORD"]:
+    edit_mode = st.sidebar.toggle("Enable Priority Editing", value=False)
+elif admin_pass:
+    st.error("Incorrect Password")
+
+
+
 # --- Main Panel ---
-if "shuffle_seed" not in st.session_state:
-    st.session_state.shuffle_seed = 0
+if "shuffle_seed" not in st.session_state: st.session_state.shuffle_seed = 0
 
 with st.container(horizontal=True):
-    filter_highlight = st.toggle("⭐ Only", value=False, on_change=reset_view)
+    prio_filter = st.segmented_control(
+        "Priority Filter",
+        options=["All", "0", "1", "2", "3", "None"],
+        selection_mode="single",
+        default="All",
+        label_visibility="collapsed",
+        on_change=reset_view
+    )
+    
     shuffle_enabled = st.toggle("Shuffle", value=False, on_change=reset_view)
     focused_mode = st.toggle("Focused", value=False, help="One entry at a time")
 
 if not focused_mode:
-    if "focused_index" not in st.session_state:
-        st.session_state.focused_index = 0
+    if "focused_index" not in st.session_state: st.session_state.focused_index = 0
 
 # Search
 with st.container(horizontal=True):
-    search_query = st.text_input("Search", placeholder="Type keywords...",
-                                 width=200,
-                                 label_visibility="collapsed",
-                                 key="search_query",
-                                 on_change=reset_view)
+    search_query = st.text_input("Search", placeholder="Type keywords...", width=200, label_visibility="collapsed", key="search_query", on_change=reset_view)
     st.button("✖", on_click=clear_search, help="Clear Filters")
     if shuffle_enabled:
         if st.button("🎲", help="Reshuffle"):
             st.session_state.shuffle_seed += 1
             reset_view()
 
-
-# Entry Filters
+# Apply Filters
 pre_type_filtered_data = []
 for item in processed_entries:
     match_section = True
@@ -321,9 +350,15 @@ for item in processed_entries:
     match_ref = True
     if selected_references:
         match_ref = any(r in item["Reference"] for r in selected_references)
-    match_highlight = True
-    if filter_highlight:
-        match_highlight = item["Highlighted"]
+
+    match_prio = True
+    if prio_filter == "None":
+        if item["Priority"]: match_prio = False
+    elif prio_filter and prio_filter != "All":
+        p_val = item["Priority"] if item["Priority"] else "None"
+        if p_val != prio_filter:
+            match_prio = False
+            
     match_search = True
     if search_query:
         query = search_query.lower()
@@ -336,14 +371,14 @@ for item in processed_entries:
                 break
         in_title = query in title_text
         match_search = in_body or in_title
-    if match_section and match_ref and match_highlight and match_search:
+
+    if match_section and match_ref and match_prio and match_search:
         pre_type_filtered_data.append(item)
 
 # Pills
 available_entry_types = set()
 for item in pre_type_filtered_data:
-    for t in item["Entry Type"]:
-        available_entry_types.add(t)
+    for t in item["Entry Type"]: available_entry_types.add(t)
 
 st.write("**Filter by Entry Type**")
 sorted_types = sorted(list(available_entry_types))
@@ -353,12 +388,8 @@ if not sorted_types:
     selected_types = []
 else:
     selected_types = st.pills(
-        "Entry Types",
-        sorted_types,
-        selection_mode="multi",
-        label_visibility="collapsed",
-        on_change=reset_view,
-        key="selected_entry_types"
+        "Entry Types", sorted_types, selection_mode="multi",
+        label_visibility="collapsed", on_change=reset_view, key="selected_entry_types"
     )
 
 # Final Filter
@@ -367,8 +398,7 @@ for item in pre_type_filtered_data:
     match_type = True
     if selected_types:
         match_type = any(t in item["Entry Type"] for t in selected_types)
-    if match_type:
-        filtered_data.append(item)
+    if match_type: filtered_data.append(item)
 
 if shuffle_enabled:
     rng = random.Random(st.session_state.shuffle_seed)

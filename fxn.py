@@ -101,94 +101,90 @@ def get_property_value(page, property_name, as_plain_text=False):
     prop_data = props[property_name]
     prop_type = prop_data["type"]
     
-    # Determine which converter to use
     converter = rich_text_to_plain_text if as_plain_text else rich_text_to_markdown
 
     if prop_type == "select":
         return prop_data["select"]["name"] if prop_data["select"] else None
-    
     elif prop_type == "multi_select":
         return [item["name"] for item in prop_data["multi_select"]]
-    
     elif prop_type == "rich_text":
         return converter(prop_data["rich_text"])
-    
     elif prop_type == "title":
         return converter(prop_data["title"])
-    
     elif prop_type == "relation":
         return [rel["id"] for rel in prop_data["relation"]]
-    
     elif prop_type == "checkbox":
         return prop_data["checkbox"]
-    
     elif prop_type == "rollup":
         rollup = prop_data["rollup"]
         values = []
-        
         if rollup["type"] == "array":
             for item in rollup["array"]:
                 if item["type"] == "title":
                     values.append(converter(item["title"]))
                 elif item["type"] == "rich_text":
-                    values.append(converter(item["rich_text"]))
-                    
+                    values.append(converter(item["rich_text"])) 
         return values
-    
     return None
-
-# --- Cached Data Functions ---
 
 @st.cache_data(persist='disk', show_spinner="Fetching Database...")
 def fetch_database_entries(api_key, db_id):
-    """
-    Fetches entries using the new Data Source API workflow (v2025).
-    Cached for 1 hour to improve performance.
-    """
     notion = init_notion_client(api_key)
     results = []
     has_more = True
     start_cursor = None
-    
     clean_id = format_uuid(db_id)
     target_source_id = clean_id
-
-    # 1. Resolve Data Source ID from Database Container
     try:
         db_meta = notion.databases.retrieve(database_id=clean_id)
         data_sources = db_meta.get("data_sources", [])
-        if data_sources:
-            target_source_id = data_sources[0]["id"]
-    except Exception:
-        pass
+        if data_sources: target_source_id = data_sources[0]["id"]
+    except Exception: pass
 
-    # 2. Query Data Source
     try:
         while has_more:
             response = notion.data_sources.query(
-                data_source_id=target_source_id,
-                start_cursor=start_cursor,
-                page_size=100
+                data_source_id=target_source_id, start_cursor=start_cursor, page_size=100
             )
-
             results.extend(response["results"])
             has_more = response["has_more"]
             start_cursor = response["next_cursor"]
-        results.sort(key=lambda x: x["created_time"])
+        
+        def get_sort_key(item):
+            props = item.get("properties", {})
+            if "Created" in props:
+                c_prop = props["Created"]
+                if c_prop["type"] == "date" and c_prop["date"]: return c_prop["date"]["start"]
+                elif c_prop["type"] == "created_time": return c_prop["created_time"]
+            return item.get("created_time", "")
+        results.sort(key=get_sort_key)
         return results
     except Exception as e:
         st.error(f"Error fetching database: {e}")
         return []
 
-
 @st.cache_data(ttl=3600, show_spinner=False)
 def fetch_page_blocks(api_key, page_id):
-    """
-    Fetches the children blocks of a page (to find images).
-    """
     notion = init_notion_client(api_key)
     try:
         response = notion.blocks.children.list(block_id=page_id)
         return response["results"]
     except Exception as e:
         return []
+
+def update_page_property(api_key, page_id, property_name, new_value):
+    """Updates a Select property for a specific page."""
+    notion = init_notion_client(api_key)
+    try:
+        notion.pages.update(
+            page_id=page_id,
+            properties={
+                property_name: {
+                    "select": {"name": new_value} if new_value else None
+                }
+            }
+        )
+        return True
+    except Exception as e:
+        st.error(f"Failed to update Notion: {e}")
+        return False
