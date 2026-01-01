@@ -135,7 +135,7 @@ def get_property_value(page, property_name, as_plain_text=False):
         return values
     return None
 
-@st.cache_data(persist='disk', show_spinner="Fetching Database...")
+@st.cache_data(persist='disk', show_spinner=False)
 def fetch_database_entries(api_key, db_id):
     notion = init_notion_client(api_key)
     results = []
