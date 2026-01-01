@@ -4,7 +4,6 @@ import re
 
 # Helper: Initialize Client
 def init_notion_client(api_key):
-    """Initialize the Notion Client."""
     return Client(auth=api_key)
 
 # Helper: ID Formatting
@@ -26,24 +25,17 @@ def format_uuid(id_str):
 
 #  Helper: Plain Text Extraction
 def rich_text_to_plain_text(rich_text_list):
-    """
-    Extracts plain text from Notion rich_text objects, ignoring annotations.
-    """
     return "".join([t.get("plain_text", "") for t in rich_text_list])
 
-# Helper: HTML Conversion
+# Helper: HTML Conversion (for tables)
 def rich_text_to_html(rich_text_list):
-    """
-    Parses Notion rich_text objects into HTML for table rendering.
-    """
     html_content = ""
     for text_obj in rich_text_list:
         content = ""
         if text_obj["type"] == "text":
             content = text_obj["text"]["content"]
-            # Basic HTML escaping
+            # escaping
             content = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
-            
             annotations = text_obj.get("annotations", {})
             if annotations.get("bold"): content = f"<b>{content}</b>"
             if annotations.get("italic"): content = f"<i>{content}</i>"
@@ -52,33 +44,24 @@ def rich_text_to_html(rich_text_list):
             if annotations.get("code"): content = f"<code style='background:rgba(135,131,120,0.15); color:#EB5757; padding:0.2em 0.4em; border-radius:3px; font-size:85%'>{content}</code>"
             if annotations.get("color") and annotations["color"] != "default":
                 color = annotations["color"]
-                # Handle basic colors; skip background colors for simplicity if needed
                 if "_background" not in color:
                     content = f"<span style='color:{color}'>{content}</span>"
-
         elif text_obj["type"] == "equation":
             expression = text_obj["equation"]["expression"]
             content = f"<code class='katex'>{expression}</code>"
-
         html_content += content
     return html_content
 
 # Helper: Markdown Conversion
 def rich_text_to_markdown(rich_text_list):
-    """
-    Parses Notion rich_text objects into Markdown.
-    """
     markdown_text = ""
     for text_obj in rich_text_list:
         content = ""
-        
-        # Handle Text
+        # Text
         if text_obj["type"] == "text":
             content = text_obj["text"]["content"]
             content = content.replace(">", "\>") # Escape blockquotes
-            
             annotations = text_obj.get("annotations", {})
-            
             if annotations.get("code"):
                 if "\n" in content:
                     content = f"\n```\n{content}\n```\n"
@@ -100,7 +83,6 @@ def rich_text_to_markdown(rich_text_list):
                     if content.endswith("  \n"):
                         suffix = "  \n"
                         content = content[:-3]
-
                 if annotations.get("bold"):
                     content = f"**{content}**"
                 if annotations.get("italic"):
@@ -111,28 +93,22 @@ def rich_text_to_markdown(rich_text_list):
                     content = f"<u>{content}</u>"
                 content = f"{prefix}{content}{suffix}"
                 
-        # Handle Equations
+        # Equations
         elif text_obj["type"] == "equation":
             expression = text_obj["equation"]["expression"]
             content = f" $ {expression} $ "
             
         markdown_text += content
-
     return markdown_text
 
 # Helper: Property Extraction
 def get_property_value(page, property_name, as_plain_text=False):
-    """
-    Safe extraction of property values based on Notion types.
-    Supports Rollups and allows forcing plain text output.
-    """
     props = page.get("properties", {})
     if property_name not in props:
         return None
     
     prop_data = props[property_name]
     prop_type = prop_data["type"]
-    
     converter = rich_text_to_plain_text if as_plain_text else rich_text_to_markdown
 
     if prop_type == "select":
@@ -205,7 +181,6 @@ def fetch_page_blocks(api_key, page_id):
         return []
 
 def update_page_property(api_key, page_id, property_name, new_value):
-    """Updates a Select property for a specific page."""
     notion = init_notion_client(api_key)
     try:
         notion.pages.update(

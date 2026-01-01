@@ -5,7 +5,6 @@ import re
 import fxn
 import time
 
-# --- Page Config ---
 st.set_page_config(page_title="DCE Prep", layout="centered", page_icon="🩺")
 
 # --- CSS ---
@@ -128,7 +127,6 @@ def render_entry(item, index, api_key, unique_suffix=""):
         c1, c2 = st.columns([3, 1])
         with c1:
             st.markdown(markdown_content, unsafe_allow_html=True)
-            # Metadata
             meta_parts = []
             if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
             if item["Section"]: meta_parts.append(f"🗄️ {', '.join(item['Section'])}")
@@ -150,11 +148,11 @@ def render_entry(item, index, api_key, unique_suffix=""):
                     on_change=update_priority_callback,
                     args=(item["id"], prio_key)
                 )
-        # Body
+        # Body Entry
         if item["Body"]:
             st.markdown(item["Body"], unsafe_allow_html=True)
 
-        # Content Blocks (Images, Tables)
+        # Blocks from Page (Images, Tables)
         types_needing_blocks = ["Imaging", "Figure", "Slides", "Table"]
         
         if any(t in types_needing_blocks for t in item["Entry Type"]):
@@ -162,7 +160,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
                 blocks = fxn.fetch_page_blocks(api_key, item["id"])
                 if blocks:
                     for block in blocks:
-                        # 1. Images
+                        # (1) Images
                         if block["type"] == "image":
                             img_type = block["image"]["type"]
                             img_url = block["image"][img_type]["url"]
@@ -174,12 +172,10 @@ def render_entry(item, index, api_key, unique_suffix=""):
                             """
                             st.markdown(img_html, unsafe_allow_html=True)
                         
-                        # 2. Tables (NEW)
+                        # (2) Tables
                         elif block["type"] == "table":
-                            # Fetch rows (children of the table block)
                             rows = fxn.fetch_page_blocks(api_key, block["id"])
                             if rows:
-                                # Check for Headers
                                 has_col_header = block["table"].get("has_column_header", False)
                                 has_row_header = block["table"].get("has_row_header", False)
                                 
@@ -191,13 +187,9 @@ def render_entry(item, index, api_key, unique_suffix=""):
                                         table_html += "<tr>"
                                         for j, cell in enumerate(cells):
                                             cell_html = fxn.rich_text_to_html(cell)
-                                            
-                                            # Determine Tag & Style
                                             tag = "td"
                                             bg_style = ""
                                             weight_style = ""
-                                            
-                                            # Header Logic
                                             if (i == 0 and has_col_header) or (j == 0 and has_row_header):
                                                 tag = "th"
                                                 bg_style = "background-color:#f8f9fa;"
@@ -209,7 +201,7 @@ def render_entry(item, index, api_key, unique_suffix=""):
                                 st.markdown(table_html, unsafe_allow_html=True)
 
 
-# --- Secrets ---
+# SECRETS
 try:
     api_key = st.secrets["NOTION_API_KEY"]
     db_id = st.secrets["NOTION_DATABASE_ID"]
@@ -217,12 +209,11 @@ except:
     st.error("Missing secrets.toml")
     st.stop()
 
-# --- Main Interface ---
-
-# 1. Top Scroll Anchor
+# MAIN INTERFACE
+# [1] Top Scroll Anchor
 st.markdown("<div id='top'></div>", unsafe_allow_html=True)
 
-# 2. Scroll Logic
+# [2] Scroll Logic
 js_scroll_script = ""
 if st.session_state.get("scroll_to_top", False):
     js_scroll_script += f"""
@@ -235,7 +226,6 @@ if st.session_state.get("scroll_to_top", False):
         console.log("Link click simulation: {time.time()}");
     """
     st.session_state.scroll_to_top = False
-
 entry_target = st.session_state.get("scroll_to_entry", None)
 if entry_target:
     js_scroll_script += f"""
@@ -250,7 +240,7 @@ if entry_target:
 if js_scroll_script:
     components.html(f"<script>{js_scroll_script}</script>", height=0, width=0)
 
-# 3. State Init
+# [3] State Init
 if "visible_count" not in st.session_state:
     try:
         saved_count = int(st.query_params.get("count", 30))
@@ -260,17 +250,16 @@ if "visible_count" not in st.session_state:
 if "render_key" not in st.session_state:
     st.session_state.render_key = "init"
 
-# 4. Fetch Data
+# [4] Fetch Data
 with st.spinner("Fetching Entries..."):
     raw_entries = fxn.fetch_database_entries(api_key, db_id)
 if not raw_entries:
     st.warning("No entries found.")
     st.stop()
 
-# 5. Process Data
+# [5] Process Data
 processed_entries = []
 all_sections = set()
-
 for entry in raw_entries:
     p_type = fxn.get_property_value(entry, "Entry Type")
     p_body = fxn.get_property_value(entry, "Body")
@@ -296,9 +285,9 @@ for entry in raw_entries:
         "raw": entry,
     })
 
-# --- Sidebar Controls ---
+# SIDEBAR
+# [1] Section Filter
 st.sidebar.subheader("Filter by Section")
-
 sorted_sections = sorted(list(all_sections))
 selected_sections = []
 if st.sidebar.button("Reset"):
@@ -313,10 +302,8 @@ else:
         if st.sidebar.checkbox(sec, key=key, on_change=reset_view):
             selected_sections.append(sec)
 
-
-
+# [2] Reference Filter
 st.sidebar.subheader("Filter by Reference")
-
 available_references = set()
 if not selected_sections:
     for item in processed_entries:
@@ -332,12 +319,13 @@ selected_references = st.sidebar.multiselect(
     on_change=reset_view
 )
 
+# [3] Cache Refresh Button
 st.sidebar.divider()
 if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch updates"):
     st.cache_data.clear()
     st.rerun()
 
-st.sidebar.divider()
+# [4] Priority Edit 
 edit_mode = False
 admin_pass = st.sidebar.text_input("🔒 Edit Priorities", type="password", key="admin_password_input")
 if "ADMIN_PASSWORD" in st.secrets and admin_pass == st.secrets["ADMIN_PASSWORD"]:
@@ -346,10 +334,9 @@ elif admin_pass:
     st.error("Incorrect Password")
 
 
-
-# --- Main Panel ---
+# MAIN PANEL
 if "shuffle_seed" not in st.session_state: st.session_state.shuffle_seed = 0
-
+# [1] Priority Segmented Control
 with st.container(horizontal=True):
     prio_filter = st.segmented_control(
         "Priority Filter",
@@ -360,6 +347,7 @@ with st.container(horizontal=True):
         on_change=reset_view
     )
 
+# [2] Other Toggles
 with st.container(horizontal=True):
     reverse_sort = st.toggle("Newest First", value=False, on_change=reset_view)
     shuffle_enabled = st.toggle("Shuffle", value=False, on_change=reset_view)
@@ -367,7 +355,7 @@ with st.container(horizontal=True):
 if not focused_mode:
     if "focused_index" not in st.session_state: st.session_state.focused_index = 0
 
-# Search
+# [3] Search Bar + Reshuffle
 with st.container(horizontal=True):
     search_query = st.text_input("Search", placeholder="Type keywords...", width=400, label_visibility="collapsed", key="search_query", on_change=reset_view)
     st.button("✖", on_click=clear_search, help="Clear Filters")
@@ -376,8 +364,7 @@ with st.container(horizontal=True):
             st.session_state.shuffle_seed += 1
             reset_view()
 
-
-# Apply Filters
+# [4] Pre-Filter Logic
 pre_type_filtered_data = []
 for item in processed_entries:
     match_section = True
@@ -386,7 +373,6 @@ for item in processed_entries:
     match_ref = True
     if selected_references:
         match_ref = any(r in item["Reference"] for r in selected_references)
-
     match_prio = True
     if prio_filter == "None":
         if item["Priority"]: match_prio = False
@@ -394,7 +380,6 @@ for item in processed_entries:
         p_val = item["Priority"] if item["Priority"] else "None"
         if p_val != prio_filter:
             match_prio = False
-            
     match_search = True
     if search_query:
         query = search_query.lower()
@@ -407,18 +392,15 @@ for item in processed_entries:
                 break
         in_title = query in title_text
         match_search = in_body or in_title
-
     if match_section and match_ref and match_prio and match_search:
         pre_type_filtered_data.append(item)
 
-# Pills
+# [5] Entry Type Filters
 available_entry_types = set()
 for item in pre_type_filtered_data:
     for t in item["Entry Type"]: available_entry_types.add(t)
-
 st.write("**Filter by Entry Type**")
 sorted_types = sorted(list(available_entry_types))
-
 if not sorted_types:
     st.caption("No entry types available for current filters.")
     selected_types = []
@@ -428,30 +410,25 @@ else:
         label_visibility="collapsed", on_change=reset_view, key="selected_entry_types"
     )
 
-# Final Filter
+# [6] Final Filter Logic
 filtered_data = []
 for item in pre_type_filtered_data:
     match_type = True
     if selected_types:
         match_type = any(t in item["Entry Type"] for t in selected_types)
     if match_type: filtered_data.append(item)
-
 if reverse_sort and not shuffle_enabled:
     filtered_data.reverse()
-
 if shuffle_enabled:
     rng = random.Random(st.session_state.shuffle_seed)
     rng.shuffle(filtered_data)
-
 total_entries = len(filtered_data)
 if total_entries == 0:
     st.warning("No entries found with current filters.")
     st.stop()
-
 list_context_id = f"{st.session_state.render_key}_{len(filtered_data)}"
 
-# --- Display ---
-
+# [7] DISPLAY
 if focused_mode:
     # Focused Mode
     st.session_state.focused_index = max(0, min(st.session_state.focused_index, total_entries - 1))
@@ -495,8 +472,7 @@ if focused_mode:
                 st.session_state.focused_index = (current_idx + 1) % total_entries
                 st.rerun()
 
-else:
-    # Grid / List Mode
+else: # List Mode
     st.caption(f"Found {total_entries} entries")
 
     visible_count = st.session_state.visible_count
