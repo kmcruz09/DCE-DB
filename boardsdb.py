@@ -73,9 +73,7 @@ def update_priority_callback(page_id, key_name):
     st.toast(f"✅ Priority updated to {new_val}") 
 
 def render_entry(item, index, api_key, unique_suffix=""):
-    """Renders a single entry card."""
     container_key = f"card_{item['id']}_{index}_{unique_suffix}"
-    
     bg_color = "#ffffff"
     border_color = "rgba(49, 51, 63, 0.2)"
     text_color = "inherit"
@@ -178,7 +176,6 @@ def render_entry(item, index, api_key, unique_suffix=""):
                             if rows:
                                 has_col_header = block["table"].get("has_column_header", False)
                                 has_row_header = block["table"].get("has_row_header", False)
-                                
                                 table_html = "<div style='overflow-x:auto; margin-bottom:12px;'><table style='width:100%; border-collapse:collapse; font-size:0.9em; border:1px solid #eee;'>"
                                 
                                 for i, row in enumerate(rows):
@@ -192,10 +189,10 @@ def render_entry(item, index, api_key, unique_suffix=""):
                                             weight_style = ""
                                             if (i == 0 and has_col_header) or (j == 0 and has_row_header):
                                                 tag = "th"
-                                                bg_style = "background-color:#f8f9fa;"
+                                                bg_style = "background-color:#ccc;"
                                                 weight_style = "font-weight:600;"
                                             
-                                            table_html += f"<{tag} style='border:1px solid #eee; padding:8px; {bg_style} {weight_style}'>{cell_html}</{tag}>"
+                                            table_html += f"<{tag} style='border:1px solid #ccc; padding:8px; {bg_style} {weight_style}'>{cell_html}</{tag}>"
                                         table_html += "</tr>"
                                 table_html += "</table></div>"
                                 st.markdown(table_html, unsafe_allow_html=True)
