@@ -52,7 +52,7 @@ def rich_text_to_html(rich_text_list):
         html_content += content
     return html_content
 
-# Helper: Markdown Conversion
+# Helper: Richtext → Markdown
 def rich_text_to_markdown(rich_text_list):
     markdown_text = ""
     for text_obj in rich_text_list:
@@ -100,6 +100,62 @@ def rich_text_to_markdown(rich_text_list):
             
         markdown_text += content
     return markdown_text
+
+# Helper: Markdown → Notion RichText
+def markdown_to_rich_text(markdown_str):
+    if not markdown_str:
+        return []
+    pattern = re.compile(r'(\*\*.*?\*\*|`[^`]+`|<u>.*?</u>|\*[^*]+\*|\$[^$]+\$)')
+    
+    parts = pattern.split(markdown_str)
+    rich_text = []
+    
+    for part in parts:
+        if not part: continue
+        
+        # Check tokens
+        if part.startswith("`") and part.endswith("`"):
+            # Code
+            rich_text.append({
+                "type": "text",
+                "text": {"content": part[1:-1]},
+                "annotations": {"code": True}
+            })
+        elif part.startswith("$") and part.endswith("$"):
+            # Equation [NEW]
+            rich_text.append({
+                "type": "equation",
+                "equation": {"expression": part[1:-1]}
+            })
+        elif part.startswith("**") and part.endswith("**"):
+            # Bold
+            rich_text.append({
+                "type": "text",
+                "text": {"content": part[2:-2]},
+                "annotations": {"bold": True}
+            })
+        elif part.startswith("<u>") and part.endswith("</u>"):
+            # Underline
+            rich_text.append({
+                "type": "text",
+                "text": {"content": part[3:-4]},
+                "annotations": {"underline": True}
+            })
+        elif part.startswith("*") and part.endswith("*") and len(part) > 2:
+            # Italic
+            rich_text.append({
+                "type": "text",
+                "text": {"content": part[1:-1]},
+                "annotations": {"italic": True}
+            })
+        else:
+            # Plain Text
+            rich_text.append({
+                "type": "text",
+                "text": {"content": part}
+            })
+            
+    return rich_text
 
 # Helper: Property Extraction
 def get_property_value(page, property_name, as_plain_text=False):
@@ -180,16 +236,30 @@ def fetch_page_blocks(api_key, page_id):
     except Exception as e:
         return []
 
-def update_page_property(api_key, page_id, property_name, new_value):
+def update_page_property(api_key, page_id, property_name, new_value, prop_type="select"):
     notion = init_notion_client(api_key)
+    
+    properties_payload = {}
+    
+    if prop_type == "select":
+        properties_payload[property_name] = {
+            "select": {"name": new_value} if new_value else None
+        }
+    elif prop_type == "multi_select":
+        properties_payload[property_name] = {
+            "multi_select": [{"name": val} for val in new_value]
+        }
+    elif prop_type == "rich_text":
+        # Updated to use the new parser including equations
+        rich_text_objects = markdown_to_rich_text(new_value)
+        properties_payload[property_name] = {
+            "rich_text": rich_text_objects
+        }
+
     try:
         notion.pages.update(
             page_id=page_id,
-            properties={
-                property_name: {
-                    "select": {"name": new_value} if new_value else None
-                }
-            }
+            properties=properties_payload
         )
         return True
     except Exception as e:

@@ -4,9 +4,65 @@ import random
 import re
 import fxn
 import time
+import concurrent.futures
 
 st.set_page_config(page_title="DCE Prep", layout="centered", page_icon="🩺")
+def kb_shortcuts():
+    # This script attaches a listener to the parent document (the Streamlit app)
+    # It intercepts Ctrl+B and Ctrl+I on any textarea to wrap text.
+    js = """
+    <script>
+    (function() {
+        if (window.parent.shortcutsAdded) return;
+        
+        window.parent.document.addEventListener('keydown', function(e) {
+            // Only fire if a text area is focused
+            if (e.target.tagName !== 'TEXTAREA') return;
 
+            // Ctrl+B or Cmd+B for Bold
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
+                e.preventDefault();
+                const textarea = e.target;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                const selection = text.substring(start, end);
+                
+                // Wrap in **
+                const replacement = "**" + selection + "**";
+                
+                textarea.value = text.substring(0, start) + replacement + text.substring(end);
+                
+                // Dispatch input event so Streamlit/React sees the change
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                
+                // Restore selection range (including the new stars)
+                textarea.setSelectionRange(start + 2, end + 2);
+            }
+            
+            // Ctrl+I or Cmd+I for Italic
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
+                e.preventDefault();
+                const textarea = e.target;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                const selection = text.substring(start, end);
+                
+                // Wrap in *
+                const replacement = "*" + selection + "*";
+                
+                textarea.value = text.substring(0, start) + replacement + text.substring(end);
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.setSelectionRange(start + 1, end + 1);
+            }
+        });
+        window.parent.shortcutsAdded = true;
+    })();
+    </script>
+    """
+    components.html(js, height=0, width=0)
+    
 # --- CSS ---
 st.markdown("""
 <style>
@@ -31,7 +87,7 @@ st.markdown("""
     .back-to-top { text-align: center; margin-top: 20px; padding-bottom: 20px; }
     .back-to-top a { text-decoration: none; color: #666; font-weight: 600; cursor: pointer; }
     .back-to-top a:hover { color: #fbc02d; }
-    div[data-testid="stButtonGroup"] {
+    /*div[data-testid="stButtonGroup"] {
         transform: scale(0.85);
         transform-origin: left top;
         margin-bottom: -15px !important; /* Pull up bottom space */
@@ -39,10 +95,42 @@ st.markdown("""
     div[data-testid="stButtonGroup"] > div {
         padding-top: 0px !important;
         padding-bottom: 0px !important;
+    }*/
+    
+    div[data-testid="stMultiSelect"] div[data-testid="stButtonGroup"] {
+        transform: scale(0.9);
+        transform-origin: left top;
     }
 
 </style>
 """, unsafe_allow_html=True)
+
+# Updates
+@st.cache_resource
+def get_thread_pool():
+    return concurrent.futures.ThreadPoolExecutor(max_workers=4)
+executor = get_thread_pool()
+if "priority_updates" not in st.session_state:
+    st.session_state.priority_updates = {}
+if "type_updates" not in st.session_state:
+    st.session_state.type_updates = {}
+if "body_updates" not in st.session_state:
+    st.session_state.body_updates = {}
+def update_priority_callback(page_id, key_name):
+    new_val = st.session_state[key_name]
+    st.session_state.priority_updates[page_id] = new_val
+    executor.submit(fxn.update_page_property, api_key, page_id, "Priority", new_val, prop_type="select")
+    st.toast(f"✅ Priority updated to {new_val}") 
+def update_type_callback(page_id, key_name):
+    new_val = st.session_state[key_name]
+    st.session_state.type_updates[page_id] = new_val
+    executor.submit(fxn.update_page_property, api_key, page_id, "Entry Type", new_val, prop_type="multi_select")
+    st.toast(f"✅ Entry Type updated")
+def update_body_callback(page_id, key_name):
+    new_val = st.session_state[key_name]
+    st.session_state.body_updates[page_id] = new_val
+    executor.submit(fxn.update_page_property, api_key, page_id, "Body", new_val, prop_type="rich_text")
+    st.toast(f"✅ Body updated")
 
 # --- UI Helpers ---
 def reset_view():
@@ -63,16 +151,7 @@ def clear_search():
     st.session_state.selected_entry_types = []
     reset_view()
 
-if "priority_updates" not in st.session_state:
-    st.session_state.priority_updates = {}
-
-def update_priority_callback(page_id, key_name):
-    new_val = st.session_state[key_name]
-    fxn.update_page_property(api_key, page_id, "Priority", new_val)
-    st.session_state.priority_updates[page_id] = new_val
-    st.toast(f"✅ Priority updated to {new_val}") 
-
-def render_entry(item, index, api_key, unique_suffix=""):
+def render_entry(item, index, api_key, edit_mode, all_available_types, unique_suffix=""):
     container_key = f"card_{item['id']}_{index}_{unique_suffix}"
     bg_color = "#ffffff"
     border_color = "rgba(49, 51, 63, 0.2)"
@@ -121,31 +200,15 @@ def render_entry(item, index, api_key, unique_suffix=""):
         title_prop = f"[{index}] {title_prop}"
         markdown_content += f"<div class='entry-title'>{title_prop}<a href='{page_url}' target='_blank' title='link for Kaiser only ✌️'> ↗</a></div>"
         
-        
-        c1, c2 = st.columns([3, 1])
-        with c1:
-            st.markdown(markdown_content, unsafe_allow_html=True)
-            meta_parts = []
-            if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
-            if item["Section"]: meta_parts.append(f"🗄️ {', '.join(item['Section'])}")
-            if item["Reference"]: meta_parts.append(f"📑 {', '.join(item['Reference'])}")
-            meta_string = "&ensp;".join(meta_parts)
-            if meta_string:
-                st.caption(meta_string)
-        with c2:
-            if edit_mode:
-                prio_key = f"prio_select_{unique_suffix}_{item['id']}"
-                current_sel = priority if priority in ["0", "1","2", "3"] else None
-                st.segmented_control(
-                    "Priority",
-                    options=["0", "1", "2", "3"],
-                    selection_mode="single",
-                    default=current_sel,
-                    key=prio_key,
-                    label_visibility="collapsed",
-                    on_change=update_priority_callback,
-                    args=(item["id"], prio_key)
-                )
+        st.markdown(markdown_content, unsafe_allow_html=True)
+        meta_parts = []
+        if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
+        if item["Section"]: meta_parts.append(f"🗄️ {', '.join(item['Section'])}")
+        if item["Reference"]: meta_parts.append(f"📑 {', '.join(item['Reference'])}")
+        meta_string = "&ensp;".join(meta_parts)
+        if meta_string:
+            st.caption(meta_string)
+ 
         # Body Entry
         if item["Body"]:
             st.markdown(item["Body"], unsafe_allow_html=True)
@@ -196,7 +259,46 @@ def render_entry(item, index, api_key, unique_suffix=""):
                                         table_html += "</tr>"
                                 table_html += "</table></div>"
                                 st.markdown(table_html, unsafe_allow_html=True)
-
+        
+        # Edit Mode at the Bottom
+        if edit_mode:
+            with st.popover("Edit Body"):
+                body_key = f"body_input_{unique_suffix}_{item['id']}"
+                st.text_area(
+                    "Body Content",
+                    value=item["Body"] if item["Body"] else "",
+                    key=body_key,
+                    on_change=update_body_callback,
+                    height="content",
+                    args=(item["id"], body_key),
+                    label_visibility="collapsed"
+                )
+            c1,c2 = st.columns([2,1])
+            with c2:
+                prio_key = f"prio_select_{unique_suffix}_{item['id']}"
+                current_sel = priority if priority in ["0", "1","2", "3"] else None
+                st.segmented_control(
+                    "Priority",
+                    options=["0", "1", "2", "3"],
+                    selection_mode="single",
+                    default=current_sel,
+                    key=prio_key,
+                    label_visibility="collapsed",
+                    on_change=update_priority_callback,
+                    args=(item["id"], prio_key)
+                )
+            with c1:
+                type_key = f"type_select_{unique_suffix}_{item['id']}"
+                st.multiselect(
+                    "Type",
+                    options=all_available_types,
+                    default=item["Entry Type"],
+                    key=type_key,
+                    label_visibility="collapsed",
+                    on_change=update_type_callback,
+                    args=(item["id"], type_key),
+                    placeholder="Type"
+                )
 
 # SECRETS
 try:
@@ -207,6 +309,9 @@ except:
     st.stop()
 
 # MAIN INTERFACE
+# [0] Inject Shortcuts
+kb_shortcuts()
+
 # [1] Top Scroll Anchor
 st.markdown("<div id='top'></div>", unsafe_allow_html=True)
 
@@ -257,15 +362,25 @@ if not raw_entries:
 # [5] Process Data
 processed_entries = []
 all_sections = set()
+global_all_types = set()
 for entry in raw_entries:
-    p_type = fxn.get_property_value(entry, "Entry Type")
-    p_body = fxn.get_property_value(entry, "Body")
+    p_type_raw = fxn.get_property_value(entry, "Entry Type")
+    p_type = p_type_raw if isinstance(p_type_raw, list) else ([p_type_raw] if p_type_raw else [])
+    
+    # Collect all types for dropdown
+    for t in p_type: global_all_types.add(t)
 
+    # 1. Apply Type Overrides (Local State)
+    if entry["id"] in st.session_state.type_updates:
+        p_type = st.session_state.type_updates[entry["id"]]
+
+    # 2. Apply Priority Overrides (Local State)
     if entry["id"] in st.session_state.priority_updates:
         p_prio = st.session_state.priority_updates[entry["id"]]
     else:
         p_prio = fxn.get_property_value(entry, "Priority")
 
+    p_body = fxn.get_property_value(entry, "Body")
     sections = fxn.get_property_value(entry, "Section-RU", as_plain_text=True) or []
     refs = fxn.get_property_value(entry, "Reference-RU", as_plain_text=True) or []
     
@@ -274,13 +389,14 @@ for entry in raw_entries:
 
     processed_entries.append({
         "id": entry["id"],
-        "Entry Type": p_type if isinstance(p_type, list) else ([p_type] if p_type else []),
+        "Entry Type": p_type,
         "Section": sections,
         "Reference": refs,
         "Body": p_body,
-        "Priority": p_prio, # "1", "2", "3", or None
+        "Priority": p_prio,
         "raw": entry,
     })
+all_types_list = sorted(list(global_all_types))
 
 # SIDEBAR
 # [1] Section Filter
@@ -451,7 +567,7 @@ if focused_mode:
     _, center_col, _ = st.columns([1, 6, 1])
     with center_col:
         item = filtered_data[current_idx]
-        render_entry(item, current_idx + 1, api_key=api_key, unique_suffix=f"focus_{list_context_id}")
+        render_entry(item, current_idx + 1, api_key=api_key, edit_mode=edit_mode, all_available_types=all_types_list, unique_suffix=f"focus_{list_context_id}")
 
     st.markdown("") 
 
@@ -482,7 +598,7 @@ else: # List Mode
             # Single Column Layout
             for i, item in enumerate(visible_data):
                 actual_index = i + 1
-                render_entry(item, actual_index, api_key=api_key, unique_suffix="grid")
+                render_entry(item, actual_index, api_key=api_key, edit_mode=edit_mode, all_available_types=all_types_list, unique_suffix="grid")
 
     # Load More
     _, btn_col, _ = st.columns([1, 2, 1])
