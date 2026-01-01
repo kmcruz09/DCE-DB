@@ -8,18 +8,29 @@ import concurrent.futures
 
 st.set_page_config(page_title="DCE Prep", layout="centered", page_icon="🩺")
 def kb_shortcuts():
-    # This script attaches a listener to the parent document (the Streamlit app)
-    # It intercepts Ctrl+B and Ctrl+I on any textarea to wrap text.
     js = """
     <script>
     (function() {
         if (window.parent.shortcutsAdded) return;
         
-        window.parent.document.addEventListener('keydown', function(e) {
-            // Only fire if a text area is focused
-            if (e.target.tagName !== 'TEXTAREA') return;
+        // Helper to force React to listen to the value change
+        function setNativeValue(element, value) {
+            const valueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, "value").set;
+            const prototype = Object.getPrototypeOf(element);
+            const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, "value").set;
+            
+            if (valueSetter && valueSetter !== prototypeValueSetter) {
+                prototypeValueSetter.call(element, value);
+            } else {
+                valueSetter.call(element, value);
+            }
+            
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+        }
 
-            // Ctrl+B or Cmd+B for Bold
+        window.parent.document.addEventListener('keydown', function(e) {
+            if (e.target.tagName !== 'TEXTAREA') return;
+            // Ctrl+B: Bold
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') {
                 e.preventDefault();
                 const textarea = e.target;
@@ -27,20 +38,11 @@ def kb_shortcuts():
                 const end = textarea.selectionEnd;
                 const text = textarea.value;
                 const selection = text.substring(start, end);
-                
-                // Wrap in **
                 const replacement = "**" + selection + "**";
-                
-                textarea.value = text.substring(0, start) + replacement + text.substring(end);
-                
-                // Dispatch input event so Streamlit/React sees the change
-                textarea.dispatchEvent(new Event('input', { bubbles: true }));
-                
-                // Restore selection range (including the new stars)
+                setNativeValue(textarea, text.substring(0, start) + replacement + text.substring(end));
                 textarea.setSelectionRange(start + 2, end + 2);
             }
-            
-            // Ctrl+I or Cmd+I for Italic
+            // Ctrl+I: Italic
             if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'i') {
                 e.preventDefault();
                 const textarea = e.target;
@@ -48,13 +50,21 @@ def kb_shortcuts():
                 const end = textarea.selectionEnd;
                 const text = textarea.value;
                 const selection = text.substring(start, end);
-                
-                // Wrap in *
                 const replacement = "*" + selection + "*";
-                
-                textarea.value = text.substring(0, start) + replacement + text.substring(end);
-                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                setNativeValue(textarea, text.substring(0, start) + replacement + text.substring(end));
                 textarea.setSelectionRange(start + 1, end + 1);
+            }
+            // Ctrl+U: Underline
+            if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'u') {
+                e.preventDefault();
+                const textarea = e.target;
+                const start = textarea.selectionStart;
+                const end = textarea.selectionEnd;
+                const text = textarea.value;
+                const selection = text.substring(start, end);
+                const replacement = "<u>" + selection + "</u>";
+                setNativeValue(textarea, text.substring(0, start) + replacement + text.substring(end));
+                textarea.setSelectionRange(start + 3, end + 3);
             }
         });
         window.parent.shortcutsAdded = true;
@@ -370,17 +380,20 @@ for entry in raw_entries:
     # Collect all types for dropdown
     for t in p_type: global_all_types.add(t)
 
-    # 1. Apply Type Overrides (Local State)
+    # 1. Entry Type Local State
     if entry["id"] in st.session_state.type_updates:
         p_type = st.session_state.type_updates[entry["id"]]
 
-    # 2. Apply Priority Overrides (Local State)
+    # 2. Priority Local State
     if entry["id"] in st.session_state.priority_updates:
         p_prio = st.session_state.priority_updates[entry["id"]]
     else:
         p_prio = fxn.get_property_value(entry, "Priority")
-
+    # 3. Body Local State
     p_body = fxn.get_property_value(entry, "Body")
+    if entry["id"] in st.session_state.body_updates:
+        p_body = st.session_state.body_updates[entry["id"]]
+    
     sections = fxn.get_property_value(entry, "Section-RU", as_plain_text=True) or []
     refs = fxn.get_property_value(entry, "Reference-RU", as_plain_text=True) or []
     
