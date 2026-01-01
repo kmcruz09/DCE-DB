@@ -31,6 +31,38 @@ def rich_text_to_plain_text(rich_text_list):
     """
     return "".join([t.get("plain_text", "") for t in rich_text_list])
 
+# Helper: HTML Conversion
+def rich_text_to_html(rich_text_list):
+    """
+    Parses Notion rich_text objects into HTML for table rendering.
+    """
+    html_content = ""
+    for text_obj in rich_text_list:
+        content = ""
+        if text_obj["type"] == "text":
+            content = text_obj["text"]["content"]
+            # Basic HTML escaping
+            content = content.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")
+            
+            annotations = text_obj.get("annotations", {})
+            if annotations.get("bold"): content = f"<b>{content}</b>"
+            if annotations.get("italic"): content = f"<i>{content}</i>"
+            if annotations.get("strikethrough"): content = f"<s>{content}</s>"
+            if annotations.get("underline"): content = f"<u>{content}</u>"
+            if annotations.get("code"): content = f"<code style='background:rgba(135,131,120,0.15); color:#EB5757; padding:0.2em 0.4em; border-radius:3px; font-size:85%'>{content}</code>"
+            if annotations.get("color") and annotations["color"] != "default":
+                color = annotations["color"]
+                # Handle basic colors; skip background colors for simplicity if needed
+                if "_background" not in color:
+                    content = f"<span style='color:{color}'>{content}</span>"
+
+        elif text_obj["type"] == "equation":
+            expression = text_obj["equation"]["expression"]
+            content = f"<code class='katex'>{expression}</code>"
+
+        html_content += content
+    return html_content
+
 # Helper: Markdown Conversion
 def rich_text_to_markdown(rich_text_list):
     """

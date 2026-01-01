@@ -131,9 +131,9 @@ def render_entry(item, index, api_key, unique_suffix=""):
             # Metadata
             meta_parts = []
             if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
-            if item["Section"]: meta_parts.append(f"📂 {', '.join(item['Section'])}")
-            if item["Reference"]: meta_parts.append(f"🔗 {', '.join(item['Reference'])}")
-            meta_string = " • ".join(meta_parts)
+            if item["Section"]: meta_parts.append(f"🗄️ {', '.join(item['Section'])}")
+            if item["Reference"]: meta_parts.append(f"📑 {', '.join(item['Reference'])}")
+            meta_string = "&ensp;".join(meta_parts)
             if meta_string:
                 st.caption(meta_string)
         with c2:
@@ -154,18 +154,18 @@ def render_entry(item, index, api_key, unique_suffix=""):
         if item["Body"]:
             st.markdown(item["Body"], unsafe_allow_html=True)
 
-        # Content Blocks (Images)
-        types_needing_images = ["Imaging", "Figure", "Slides", "Table"]
+        # Content Blocks (Images, Tables)
+        types_needing_blocks = ["Imaging", "Figure", "Slides", "Table"]
         
-        if any(t in types_needing_images for t in item["Entry Type"]):
+        if any(t in types_needing_blocks for t in item["Entry Type"]):
             with st.container(key=f"imgs_{container_key}"):
                 blocks = fxn.fetch_page_blocks(api_key, item["id"])
                 if blocks:
                     for block in blocks:
+                        # 1. Images
                         if block["type"] == "image":
                             img_type = block["image"]["type"]
                             img_url = block["image"][img_type]["url"]
-                            #st.image(img_url, width=400)
                             img_html = f"""
                             <a href="{img_url}" target="_blank" title="Click to open full size">
                                 <img src="{img_url}" 
@@ -173,6 +173,40 @@ def render_entry(item, index, api_key, unique_suffix=""):
                             </a><br>
                             """
                             st.markdown(img_html, unsafe_allow_html=True)
+                        
+                        # 2. Tables (NEW)
+                        elif block["type"] == "table":
+                            # Fetch rows (children of the table block)
+                            rows = fxn.fetch_page_blocks(api_key, block["id"])
+                            if rows:
+                                # Check for Headers
+                                has_col_header = block["table"].get("has_column_header", False)
+                                has_row_header = block["table"].get("has_row_header", False)
+                                
+                                table_html = "<div style='overflow-x:auto; margin-bottom:12px;'><table style='width:100%; border-collapse:collapse; font-size:0.9em; border:1px solid #eee;'>"
+                                
+                                for i, row in enumerate(rows):
+                                    if row["type"] == "table_row":
+                                        cells = row["table_row"]["cells"]
+                                        table_html += "<tr>"
+                                        for j, cell in enumerate(cells):
+                                            cell_html = fxn.rich_text_to_html(cell)
+                                            
+                                            # Determine Tag & Style
+                                            tag = "td"
+                                            bg_style = ""
+                                            weight_style = ""
+                                            
+                                            # Header Logic
+                                            if (i == 0 and has_col_header) or (j == 0 and has_row_header):
+                                                tag = "th"
+                                                bg_style = "background-color:#f8f9fa;"
+                                                weight_style = "font-weight:600;"
+                                            
+                                            table_html += f"<{tag} style='border:1px solid #eee; padding:8px; {bg_style} {weight_style}'>{cell_html}</{tag}>"
+                                        table_html += "</tr>"
+                                table_html += "</table></div>"
+                                st.markdown(table_html, unsafe_allow_html=True)
 
 
 # --- Secrets ---
