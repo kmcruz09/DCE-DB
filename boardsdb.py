@@ -1,12 +1,13 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import random
-import re
 import fxn
 import time
 import concurrent.futures
 
 st.set_page_config(page_title="DCE Prep", layout="centered", page_icon="🩺")
+
+### JS INJECT
 def kb_shortcuts():
     js = """
     <script>
@@ -73,7 +74,7 @@ def kb_shortcuts():
     """
     components.html(js, height=0, width=0)
     
-# --- CSS ---
+### CSS INJECT
 st.markdown("""
 <style>
     .block-container { padding-top: 4rem; padding-bottom: 2rem; }
@@ -97,16 +98,7 @@ st.markdown("""
     .back-to-top { text-align: center; margin-top: 20px; padding-bottom: 20px; }
     .back-to-top a { text-decoration: none; color: #666; font-weight: 600; cursor: pointer; }
     .back-to-top a:hover { color: #fbc02d; }
-    /*div[data-testid="stButtonGroup"] {
-        transform: scale(0.85);
-        transform-origin: left top;
-        margin-bottom: -15px !important; /* Pull up bottom space */
-    }
-    div[data-testid="stButtonGroup"] > div {
-        padding-top: 0px !important;
-        padding-bottom: 0px !important;
-    }*/
-    
+
     div[data-testid="stMultiSelect"] div[data-testid="stButtonGroup"] {
         transform: scale(0.9);
         transform-origin: left top;
@@ -115,34 +107,42 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Updates
+### NOTION DB UPDATES
 @st.cache_resource
 def get_thread_pool():
     return concurrent.futures.ThreadPoolExecutor(max_workers=4)
 executor = get_thread_pool()
-if "priority_updates" not in st.session_state:
-    st.session_state.priority_updates = {}
-if "type_updates" not in st.session_state:
-    st.session_state.type_updates = {}
-if "body_updates" not in st.session_state:
-    st.session_state.body_updates = {}
+
+if "priority_updates" not in st.session_state: st.session_state.priority_updates = {}
+if "type_updates" not in st.session_state: st.session_state.type_updates = {}
+if "body_updates" not in st.session_state: st.session_state.body_updates = {}
+if "title_updates" not in st.session_state: st.session_state.title_updates = {}
+
 def update_priority_callback(page_id, key_name):
     new_val = st.session_state[key_name]
     st.session_state.priority_updates[page_id] = new_val
-    executor.submit(fxn.update_page_property, api_key, page_id, "Priority", new_val, prop_type="select")
     st.toast(f"✅ Priority updated to {new_val}") 
+    executor.submit(fxn.update_page_property, api_key, page_id, "Priority", new_val, prop_type="select")
+
 def update_type_callback(page_id, key_name):
     new_val = st.session_state[key_name]
     st.session_state.type_updates[page_id] = new_val
-    executor.submit(fxn.update_page_property, api_key, page_id, "Entry Type", new_val, prop_type="multi_select")
     st.toast(f"✅ Entry Type updated")
+    executor.submit(fxn.update_page_property, api_key, page_id, "Entry Type", new_val, prop_type="multi_select")
+
 def update_body_callback(page_id, key_name):
     new_val = st.session_state[key_name]
     st.session_state.body_updates[page_id] = new_val
-    executor.submit(fxn.update_page_property, api_key, page_id, "Body", new_val, prop_type="rich_text")
     st.toast(f"✅ Body updated")
+    executor.submit(fxn.update_page_property, api_key, page_id, "Body", new_val, prop_type="rich_text")
 
-# --- UI Helpers ---
+def update_title_callback(page_id, key_name, prop_name):
+    new_val = st.session_state[key_name]
+    st.session_state.title_updates[page_id] = new_val
+    st.toast(f"✅ Title updated")
+    executor.submit(fxn.update_page_property, api_key, page_id, prop_name, new_val, prop_type="title")
+
+### UI HELPERS
 def reset_view():
     """Resets view state and scrolls to top when filters change."""
     st.session_state.focused_index = 0
@@ -161,6 +161,7 @@ def clear_search():
     st.session_state.selected_entry_types = []
     reset_view()
 
+### RENDER ENTRY FUNCTION
 def render_entry(item, index, api_key, edit_mode, all_available_types, unique_suffix=""):
     container_key = f"card_{item['id']}_{index}_{unique_suffix}"
     bg_color = "#ffffff"
@@ -181,6 +182,7 @@ def render_entry(item, index, api_key, edit_mode, all_available_types, unique_su
         text_color = "#262730"
 
     with st.container(key=container_key, border=True):
+        # Title
         markdown_content = f"<div id='entry-{index}-{unique_suffix}'></div>"
         if priority in ["1", "2", "3"]:
             markdown_content += f"""
@@ -199,18 +201,23 @@ def render_entry(item, index, api_key, edit_mode, all_available_types, unique_su
                 }}
             </style>
             """
-        title_prop = "Untitled"
-        page_url = item["raw"]["url"]
-
+        title_text_clean = "Untitled"
+        title_prop_name = "Name" # Default fallback
         for key, val in item["raw"]["properties"].items():
             if val["type"] == "title":
-                title_text = fxn.rich_text_to_plain_text(val["title"])
-                if title_text: title_prop = title_text
+                title_prop_name = key
+                txt = fxn.rich_text_to_plain_text(val["title"])
+                if txt: title_text_clean = txt
                 break
-        title_prop = f"[{index}] {title_prop}"
-        markdown_content += f"<div class='entry-title'>{title_prop}<a href='{page_url}' target='_blank' title='link for Kaiser only ✌️'> ↗</a></div>"
+        if item["id"] in st.session_state.title_updates:
+            title_text_clean = st.session_state.title_updates[item["id"]]
+        title_display = f"[{index}] {title_text_clean}"
+        page_url = item["raw"]["url"]
         
+        markdown_content += f"<div class='entry-title'>{title_display}<a href='{page_url}' target='_blank' title='link for Kaiser only ✌️'> ↗</a></div>"
         st.markdown(markdown_content, unsafe_allow_html=True)
+
+        # Meta
         meta_parts = []
         if item["Entry Type"]: meta_parts.append(f"◾️ {', '.join(item['Entry Type'])}")
         if item["Section"]: meta_parts.append(f"🗄️ {', '.join(item['Section'])}")
@@ -272,17 +279,29 @@ def render_entry(item, index, api_key, edit_mode, all_available_types, unique_su
         
         # Edit Mode at the Bottom
         if edit_mode:
-            with st.popover("Edit Body"):
-                body_key = f"body_input_{unique_suffix}_{item['id']}"
-                st.text_area(
-                    "Body Content",
-                    value=item["Body"] if item["Body"] else "",
-                    key=body_key,
-                    on_change=update_body_callback,
-                    height="content",
-                    args=(item["id"], body_key),
-                    label_visibility="collapsed"
-                )
+            with st.container(horizontal=True):
+                with st.popover("Edit Title"):
+                    title_key = f"title_input_{unique_suffix}_{item['id']}"
+                    st.text_area(
+                        "Entry Title",
+                        value=title_text_clean, 
+                        key=title_key,
+                        on_change=update_title_callback,
+                        args=(item["id"], title_key, title_prop_name),
+                        height=100,
+                        label_visibility="collapsed"
+                    )
+                with st.popover("Edit Body"):
+                    body_key = f"body_input_{unique_suffix}_{item['id']}"
+                    st.text_area(
+                        "Body Content",
+                        value=item["Body"] if item["Body"] else "",
+                        key=body_key,
+                        on_change=update_body_callback,
+                        height="content",
+                        args=(item["id"], body_key),
+                        label_visibility="collapsed"
+                    )
             c1,c2 = st.columns([2,1])
             with c2:
                 prio_key = f"prio_select_{unique_suffix}_{item['id']}"
@@ -310,7 +329,7 @@ def render_entry(item, index, api_key, edit_mode, all_available_types, unique_su
                     placeholder="Type"
                 )
 
-# SECRETS
+### SECRETS
 try:
     api_key = st.secrets["NOTION_API_KEY"]
     db_id = st.secrets["NOTION_DATABASE_ID"]
@@ -318,7 +337,7 @@ except:
     st.error("Missing secrets.toml")
     st.stop()
 
-# MAIN INTERFACE
+### MAIN INTERFACE
 # [0] Inject Shortcuts
 kb_shortcuts()
 
@@ -411,7 +430,7 @@ for entry in raw_entries:
     })
 all_types_list = sorted(list(global_all_types))
 
-# SIDEBAR
+### SIDEBAR
 # [1] Section Filter
 st.sidebar.subheader("Filter by Section")
 sorted_sections = sorted(list(all_sections))
@@ -452,15 +471,35 @@ if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch update
     st.rerun()
 
 # [4] Priority Edit 
+st.sidebar.divider()
+if "is_admin" not in st.session_state:
+    st.session_state.is_admin = False
 edit_mode = False
-admin_pass = st.sidebar.text_input("🔒 Edit Priorities", type="password", key="admin_password_input")
-if "ADMIN_PASSWORD" in st.secrets and admin_pass == st.secrets["ADMIN_PASSWORD"]:
-    edit_mode = st.sidebar.toggle("Enable Priority Editing", value=False)
-elif admin_pass:
-    st.error("Incorrect Password")
+# Not Logged In
+if not st.session_state.is_admin:
+    # Not Logged In
+    with st.sidebar.form("login_form"):
+        password_input = st.text_input("Admin Access", type="password")
+        submit_login = st.form_submit_button("Login")
+        if submit_login:
+            if "ADMIN_PASSWORD" in st.secrets and password_input == st.secrets["ADMIN_PASSWORD"]:
+                st.session_state.is_admin = True
+                st.rerun()
+            else:
+                st.error("Incorrect Password")
+else:
+    # Logged In
+    with st.sidebar.container(horizontal=True):
+        st.write("🔓 **Admin Active**")
+        if st.button("✖", help="Logout"):
+            st.session_state.is_admin = False
+            if "edit_mode" in st.session_state:
+                st.session_state.edit_mode = False
+            st.rerun()
+    edit_mode = st.sidebar.toggle("Enable Edit Mode", key="edit_mode")
 
 
-# MAIN PANEL
+### MAIN PANEL
 if "shuffle_seed" not in st.session_state: st.session_state.shuffle_seed = 0
 # [1] Priority Segmented Control
 with st.container(horizontal=True):

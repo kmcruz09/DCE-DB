@@ -238,9 +238,7 @@ def fetch_page_blocks(api_key, page_id):
 
 def update_page_property(api_key, page_id, property_name, new_value, prop_type="select"):
     notion = init_notion_client(api_key)
-    
     properties_payload = {}
-    
     if prop_type == "select":
         properties_payload[property_name] = {
             "select": {"name": new_value} if new_value else None
@@ -255,13 +253,12 @@ def update_page_property(api_key, page_id, property_name, new_value, prop_type="
         properties_payload[property_name] = {
             "rich_text": rich_text_objects
         }
-
+    elif prop_type == "title":
+        rich_text_objects = markdown_to_rich_text(new_value)
+        properties_payload[property_name] = {"title": rich_text_objects}
     try:
-        notion.pages.update(
-            page_id=page_id,
-            properties=properties_payload
-        )
+        notion.pages.update(page_id=page_id, properties=properties_payload)
         return True
     except Exception as e:
-        st.error(f"Failed to update Notion: {e}")
+        print(f"Failed to update Notion: {e}")
         return False
