@@ -121,26 +121,26 @@ if "title_updates" not in st.session_state: st.session_state.title_updates = {}
 def update_priority_callback(page_id, key_name):
     new_val = st.session_state[key_name]
     st.session_state.priority_updates[page_id] = new_val
-    st.toast(f"✅ Priority updated to {new_val}") 
     executor.submit(fxn.update_page_property, api_key, page_id, "Priority", new_val, prop_type="select")
+    st.toast(f"✅ Priority updated to {new_val}") 
 
 def update_type_callback(page_id, key_name):
     new_val = st.session_state[key_name]
     st.session_state.type_updates[page_id] = new_val
-    st.toast(f"✅ Entry Type updated")
     executor.submit(fxn.update_page_property, api_key, page_id, "Entry Type", new_val, prop_type="multi_select")
+    st.toast(f"✅ Entry Type updated")
 
 def update_body_callback(page_id, key_name):
     new_val = st.session_state[key_name]
     st.session_state.body_updates[page_id] = new_val
-    st.toast(f"✅ Body updated")
     executor.submit(fxn.update_page_property, api_key, page_id, "Body", new_val, prop_type="rich_text")
+    st.toast(f"✅ Body updated")
 
 def update_title_callback(page_id, key_name, prop_name):
     new_val = st.session_state[key_name]
     st.session_state.title_updates[page_id] = new_val
-    st.toast(f"✅ Title updated")
     executor.submit(fxn.update_page_property, api_key, page_id, prop_name, new_val, prop_type="title")
+    st.toast(f"✅ Title updated")
 
 ### UI HELPERS
 def reset_view():
@@ -470,8 +470,7 @@ if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch update
     st.cache_data.clear()
     st.rerun()
 
-# [4] Priority Edit 
-st.sidebar.divider()
+# [4] Edit Mode
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 edit_mode = False
