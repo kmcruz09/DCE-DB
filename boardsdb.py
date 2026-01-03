@@ -393,16 +393,14 @@ processed_entries = []
 all_sections = set()
 global_all_types = set()
 for entry in raw_entries:
+    # Entry Types
     p_type_raw = fxn.get_property_value(entry, "Entry Type")
     p_type = p_type_raw if isinstance(p_type_raw, list) else ([p_type_raw] if p_type_raw else [])
-    
-    # Collect all types for dropdown
     for t in p_type: global_all_types.add(t)
 
     # 1. Entry Type Local State
     if entry["id"] in st.session_state.type_updates:
         p_type = st.session_state.type_updates[entry["id"]]
-
     # 2. Priority Local State
     if entry["id"] in st.session_state.priority_updates:
         p_prio = st.session_state.priority_updates[entry["id"]]
@@ -464,21 +462,17 @@ selected_references = st.sidebar.multiselect(
     on_change=reset_view
 )
 
-# [3] Cache Refresh Button
+# [3] Admin Access
 st.sidebar.divider()
-if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch updates"):
-    st.cache_data.clear()
-    st.rerun()
-
-# [4] Edit Mode
 if "is_admin" not in st.session_state:
     st.session_state.is_admin = False
 edit_mode = False
+
 # Not Logged In
 if not st.session_state.is_admin:
     # Not Logged In
     with st.sidebar.form("login_form"):
-        password_input = st.text_input("Admin Access", type="password")
+        password_input = st.text_input("🔒 Admin Access", type="password")
         submit_login = st.form_submit_button("Login")
         if submit_login:
             if "ADMIN_PASSWORD" in st.secrets and password_input == st.secrets["ADMIN_PASSWORD"]:
@@ -486,16 +480,20 @@ if not st.session_state.is_admin:
                 st.rerun()
             else:
                 st.error("Incorrect Password")
+
+# Logged In
 else:
-    # Logged In
     with st.sidebar.container(horizontal=True):
-        st.write("🔓 **Admin Active**")
+        st.subheader("🔓 Admin Active")
         if st.button("✖", help="Logout"):
             st.session_state.is_admin = False
             if "edit_mode" in st.session_state:
                 st.session_state.edit_mode = False
             st.rerun()
     edit_mode = st.sidebar.toggle("Enable Edit Mode", key="edit_mode")
+    if st.sidebar.button("🔄️ Refresh Cache", help="Clear cache and fetch updates"):
+        st.cache_data.clear()
+        st.rerun()
 
 
 ### MAIN PANEL
